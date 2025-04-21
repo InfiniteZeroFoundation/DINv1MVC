@@ -102,6 +102,17 @@ npx create-react-app frontend
 cd ./frontend
 npm install
 ```
+---
+
+### Reset Dataset
+
+```bash
+cd /home/audumlabs/projects/DINv1MVC/fastapi/pyapp
+rm -rf Dataset/clients/*
+rm -rf Dataset/train/*
+rm -rf Dataset/test/*
+rm -rf data/*
+```
 
 ---
 ## Dependencies (Assuming Ubuntu OS)
