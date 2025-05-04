@@ -64,6 +64,15 @@ img, svg, video, canvas {
   min-height: 100vh;
 }
 
+h3 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #333; /* Dark text for contrast */
+  margin-bottom: 1rem; /* Space below the heading */
+  text-align: center; /* Center-align the heading */
+  letter-spacing: 1px; /* Add slight spacing between letters */
+}
+
 .container {
   max-width: 1200px;
   margin-inline: auto;

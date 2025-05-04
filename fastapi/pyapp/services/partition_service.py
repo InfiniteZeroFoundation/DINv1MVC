@@ -4,7 +4,7 @@ import os
 
 def partition_dataset(dataset, num_clients, seed=42):
     """
-    Partition the dataset into `num_clients` subsets.
+    Partition the dataset into `num_clients` subsets and extract the actual data.
 
     Args:
         dataset: The dataset to partition.
@@ -12,9 +12,8 @@ def partition_dataset(dataset, num_clients, seed=42):
         seed: Random seed for reproducibility (default: 42).
 
     Returns:
-        A list of partitioned datasets.
+        A list of lists, where each inner list contains the actual data for a client.
     """
-
     total_samples = len(dataset)
     indices = list(range(total_samples))
 
@@ -27,11 +26,11 @@ def partition_dataset(dataset, num_clients, seed=42):
     # Split indices into `num_clients` chunks
     partitions = np.array_split(indices, num_clients)
 
-    # Create partitioned datasets
+    # Extract the actual data for each partition
     partitioned_data = []
-    for i, partition in enumerate(partitions):
-        subset = torch.utils.data.Subset(dataset, partition)
-        partitioned_data.append(subset)
+    for partition in partitions:
+        subset_data = [dataset[idx] for idx in partition]
+        partitioned_data.append(subset_data)
 
     return partitioned_data
 
@@ -39,10 +38,13 @@ def partition_dataset(dataset, num_clients, seed=42):
 def save_partitioned_data(partitioned_data, output_dir="./Dataset/clients"):
     """
     Save partitioned data to disk.
+
+    Args:
+        partitioned_data: A list of lists, where each inner list contains the actual data for a client.
+        output_dir: Directory where partitioned data will be saved.
     """
     os.makedirs(output_dir, exist_ok=True)
 
     for i, partition in enumerate(partitioned_data):
-        # Save each partition as a list of indices
-        indices = [idx for idx in partition.indices]
-        torch.save(indices, f"{output_dir}/clientDataset_{i+1}.pt")
+        # Save the actual data for the i-th client
+        torch.save(partition, f"{output_dir}/clientDataset_{i+1}.pt")

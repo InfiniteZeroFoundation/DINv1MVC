@@ -1,6 +1,7 @@
 import logo from './logo.svg';
 import './App.css';
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
+import { TooltipProvider, TooltipContext } from "./context/TooltipContext"; 
 
 
 /** ======================= TAB BAR ======================= */
@@ -24,20 +25,54 @@ function TabBar({ activeTab, setActiveTab }) {
 
 /** ======================= ModelOwner TAB ======================= */
 function ModelOwnerTab() {
-  const [genesisModelF, setGenesisModelF] = useState(false);
+  const [genesisModelsetF, setGenesisModelF] = useState(false);
+  const { showTooltip } = useContext(TooltipContext);
+  const [dincordinator_address, setDincoordinatorAddress] = useState(null);
+  const [genesis_model_ipfs_hash, setGenesisModelIpfsHash] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch the initial state of genesisModelF from the FastAPI backend
+  useEffect(() => {
+    const fetchGenesisModelState = async () => {
+      try {
+        const response = await fetch("http://localhost:8000/modelowner/getGenesisModelsetF", { method: "POST" });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        console.log("Initial genesisModelF state:", data.IS_GenesisModelCreated);
+        console.log(data);
+        // Update the state based on the server response
+        setGenesisModelF(data.IS_GenesisModelCreated);
+        setDincoordinatorAddress(data.dincordinator_address);
+        setGenesisModelIpfsHash(data.model_ipfs_hash);
+        setLoading(false);
+      } catch (err) {
+        console.error("Error fetching genesisModelF state:", err);
+        // Optionally show an error tooltip
+        showTooltip(err.message, true);
+      }
+    };
+
+    fetchGenesisModelState(); // Call the function when the component mounts
+  },[]); // Add dependencies if necessary (e.g., showTooltip)
+
+
   
   const createGenesisModel = async () => {
     try {
-      const response = await fetch("http://localhost:8000/modelowner/createGenesisModel");
+      const response = await fetch("http://localhost:8000/modelowner/createGenesisModel", { method: "POST" }); // Assuming this is a POST request
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const data = await response.json();
       console.log(data.message);
-
+      
       // Show tooltip
       if (data.status === "success") {
-        setGenesisModelF(true);
+        setGenesisModelF(data.IS_GenesisModelCreated);
+        setDincoordinatorAddress(data.dincordinator_address);
+        setGenesisModelIpfsHash(data.model_ipfs_hash);
         showTooltip(data.message, false);
       } else {
         showTooltip(data.message, true);
@@ -52,25 +87,113 @@ function ModelOwnerTab() {
   return (
     <div className="tab-content">
       <h2>ModelOwner</h2>
-      {genesisModelF ? (
-        <div>
-          <h3>Genesis Model Available</h3>
-        </div>
+      {loading ? (
+        <div>Loading...</div>
       ) : (
-        <div>
-          <h3>Genesis Model Not Available</h3>
-          <button className="button button--primary" onClick={() => createGenesisModel()}>Create Genesis Model</button>
-        </div>
+        <>
+        {genesisModelsetF ? (
+          <div>
+            <h3>Genesis Model Available</h3>
+            <p>DINCoordinator Address: {dincordinator_address}</p>
+            <p>Genesis Model IPFS Hash: {genesis_model_ipfs_hash}</p>
+          </div>
+        ) : (
+          <div>
+            <h3>Genesis Model Not Available</h3>
+            <button className="button button--primary" onClick={() => createGenesisModel()} style={{ marginTop: "1rem" }}>Create Genesis Model</button>
+          </div>
+        )}
+        </>
       )}
+      
     </div>
   );
 }
 
 /** ======================= Clients TAB ======================= */
 function ClientsTab() {
+
+  const [clientModelsCreatedF, setClientModelsCreatedF] = useState(false);
+  const [client_model_ipfs_hashes, setClientModelIpfsHashes] = useState([]);
+  const [clients_address, setClientsAddress] = useState([]);
+  const { showTooltip } = useContext(TooltipContext);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchClientModelState = async () => {
+      try {
+        const response = await fetch("http://localhost:8000/clients/getClientModelsCreatedF", { method: "POST" });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        console.log(data);
+        console.log("Initial clientModelsCreatedF state:", data.client_models_created_f);
+        setClientModelsCreatedF(data.client_models_created_f);
+        setClientModelIpfsHashes(data.client_model_ipfs_hashes);
+        setClientsAddress(data.client_addresses);
+        setLoading(false);
+      } catch (err) {
+        console.error("Error fetching clientModelsCreatedF state:", err);
+        showTooltip(err.message, true);
+      }
+    };
+
+    fetchClientModelState();
+  }, []);
+
+  const createClientModels = async () => {
+    try {
+      const response = await fetch("http://localhost:8000/clients/createClientModels", { method: "POST" });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      console.log(data.message);
+      
+      // Show tooltip
+      if (data.status === "success") {
+        setClientModelsCreatedF(data.client_models_created_f);
+        showTooltip(data.message, false);
+      } else {
+        showTooltip(data.message, true);
+      }
+    } catch (err) {
+      console.error("Error creating client models:", err);
+      // Show error tooltip
+      showTooltip(err.message, true);
+    }
+  };
+
   return (
     <div className="tab-content">
       <h2>Clients</h2>
+      {loading ? (
+        <div>Loading...</div>
+      ) : (
+        <>
+        {clientModelsCreatedF ? (
+        <div>
+          <h3>Client Models Available</h3>
+          {clients_address && clients_address.length > 0 ? (
+            clients_address.map((address, index) => (
+              <p key={index}>
+                {address} : {client_model_ipfs_hashes[index]}
+              </p>
+            ))
+          ) : (
+            <p>No client models available.</p>
+          )}
+        </div>
+      ) : (
+        <div>
+          <h3>Client Models Not Available</h3>
+          <button className="button button--primary" onClick={() => createClientModels()} style={{ marginTop: "1rem" }}>Create Client Models</button>
+        </div>
+        )}
+        </> 
+      )}
+      
     </div>
   );
 }
@@ -88,32 +211,7 @@ function ValidatorsTab() {
 
 function App() {
   const [activeTab, setActiveTab] = useState("ModelOwner");
-  const [tooltipMsg, setTooltipMsg] = useState("");
-  const [tooltipVisible, setTooltipVisible] = useState(false);
-  const [tooltipTimeout, setTooltipTimeout] = useState(null);
-  const [tooltipClass, setTooltipClass] = useState("");
-
-
-  // Function to show tooltip with dynamic content and styling
-  const showTooltip = (message, isError) => {
-    setTooltipMsg(message); // Set the message content
-    setTooltipClass(isError ? "message--error" : "message--success"); // Set the class (red/green)
-    setTooltipVisible(true); // Show the tooltip
-
-    // Clear any existing timeout to avoid conflicts
-    if (tooltipTimeout) {
-      clearTimeout(tooltipTimeout); // Cancel the previous timeout
-    }
-
-    // Set a new timeout to hide the tooltip after 3 seconds
-    const timeoutId = setTimeout(() => {
-      setTooltipVisible(false); // Hide the tooltip
-      setTooltipTimeout(null); // Clear the reference to the timeout ID
-    }, 3000);
-
-    // Save the new timeout ID in the state
-    setTooltipTimeout(timeoutId);
-  };
+  const { tooltipVisible, tooltipMsg, tooltipClass, hideTooltip, showTooltip } = useContext(TooltipContext);
 
 
   const handleResetAll = async () => {
@@ -185,7 +283,7 @@ function App() {
       {tooltipVisible && (
         <div className={`tooltip ${tooltipClass}`} style={{ marginTop: "1rem", marginBottom: "1rem" }}>
           <span>{tooltipMsg}</span>
-          <button className="tooltip-close" onClick={() => setTooltipVisible(false)}>
+          <button onClick={hideTooltip} className="tooltip-close">
             &times;
           </button>
         </div>
