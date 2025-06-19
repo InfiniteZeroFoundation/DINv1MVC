@@ -42,7 +42,6 @@ contract DINTaskCoordinator {
 
     function setGenesisModelIpfsHash(string memory _genesisModelIpfsHash) public onlyOwner {
         genesisModelIpfsHash = _genesisModelIpfsHash;
-        GI = 1;
     }
 
     function getGenesisModelIpfsHash() public view returns (string memory) {

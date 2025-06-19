@@ -9,6 +9,7 @@ import pandas as pd
 import numpy as np
 from sklearn.linear_model import LinearRegression
 import pickle
+import time
 from pydantic import BaseModel
 from typing import Optional
 
@@ -19,7 +20,7 @@ from services.model_architect import getGenesisModelIpfs, get_DINTaskCoordinator
 
 
 from services.client_services import train_client_model_and_upload_to_ipfs
-from services.DAO_services import get_DINCoordinator_Instance, get_DINtokenContract_Instance
+from services.DAO_services import get_DINCoordinator_Instance, get_DINtokenContract_Instance, get_DINValidatorStake_Instance
 
 load_dotenv()
 
@@ -99,6 +100,8 @@ def get_modelowner_state():
         
         DINTaskCoordinator_Contract_Address = env_config.get("DINTaskCoordinator_Contract_Address")
         
+        IS_GenesisModelCreated = env_config.get("IS_GenesisModelCreated")
+        model_hash = env_config.get("GenesisModelIpfsHash")
         if DINTaskCoordinator_Contract_Address is None:
             dintaskcoordinator_dintoken_balance = 0
         else:
@@ -122,6 +125,8 @@ def get_modelowner_state():
             "model_owner_dintoken_balance": model_owner_dintoken_balance,
             "dintaskcoordinator_address": DINTaskCoordinator_Contract_Address,
             "dintaskcoordinator_dintoken_balance": dintaskcoordinator_dintoken_balance,
+            "IS_GenesisModelCreated": IS_GenesisModelCreated,
+            "model_ipfs_hash": model_hash
             }
             
     except Exception as e:
@@ -133,7 +138,10 @@ def get_modelowner_state():
                 "dintaskcoordinator_address": None,
                 "dintaskcoordinator_dintoken_balance": None,
                 "IS_GenesisModelCreated": False,
-                "model_ipfs_hash": None,}
+                "model_ipfs_hash": None,
+                "IS_GenesisModelCreated": False,
+                "model_ipfs_hash": None
+                }
     
 
 @router.post("/modelowner/depositAndMintDINTokens")
@@ -254,31 +262,13 @@ def deploy_dintaskcoordinator():
         return {"message": "DINTaskCoordinator contract deployed successfully",
                 "status": "success",
                 "dintaskcoordinator_contract_address": dintaskcoordinator_contract_address,
-                "dintaskcoordinator_dintoken_balance": dintaskcoordinatorDintokenBalance}
+                "dintaskcoordinator_dintoken_balance": dintaskcoordinatorDintokenBalance, 
+                "GIstate": "Awaiting Genesis Model"}
         
     except Exception as e:
         print("Error deploying DINTaskCoordinator:", e)
         return {"message": str(e),
                 "status": "error"}
-
-@router.post("/modelowner/getGenesisModelsetF")
-def get_genesis_modelsetF():
-    try:
-        env_config = dotenv_values(".env")
-        IS_GenesisModelCreated = env_config.get("IS_GenesisModelCreated")
-        model_hash = env_config.get("GenesisModelIpfsHash")
-        dincoordinator_address = env_config.get("DINCoordinator_Contract_Address")
-        return {"message": "Genesis model state fetched successfully",
-                "status": "success",
-                "IS_GenesisModelCreated": IS_GenesisModelCreated,
-                "model_ipfs_hash": model_hash,
-                "dincordinator_address": dincoordinator_address}
-    except Exception as e:
-        return {"message": str(e),
-                "status": "error",
-                "IS_GenesisModelCreated": False, 
-                "model_ipfs_hash": None,
-                "dincordinator_address": None}
 
 
 @router.post("/modelowner/createGenesisModel")
@@ -288,14 +278,20 @@ def create_genesis_model():
         w3 = get_w3()
         model_hash = getGenesisModelIpfs()
         
-        model_owner_account = w3.eth.accounts[1] # = w3.eth.account.from_key(private_keys[0])
+        
+        
+        env_config = dotenv_values(".env")
+        
+        model_owner_account = env_config.get("ModelOwner_Address")
         print("Model owner account:", model_owner_account)
         
+        DINToken_Contract_Address = env_config.get("DINToken_Contract_Address")
         
-        # Create contract instance
-        deployed_DINCoordinatorContract = get_DINCoordinator_Instance(dincoordinator_address=dincoordinator_contract_address)
+        DINTaskCoordinator_Contract_Address = env_config.get("DINTaskCoordinator_Contract_Address")
         
-        tx_hash = deployed_DINCoordinatorContract.functions.setGenesisModelIpfsHash(model_hash).transact({
+        deployed_DINTaskCoordinatorContract = get_DINTaskCoordinator_Instance(dintaskcoordinator_address=DINTaskCoordinator_Contract_Address)
+        
+        tx_hash = deployed_DINTaskCoordinatorContract.functions.setGenesisModelIpfsHash(model_hash).transact({
             "from": model_owner_account,
             "gas": 3000000,
             "gasPrice": w3.to_wei("5", "gwei"),
@@ -303,28 +299,242 @@ def create_genesis_model():
         
         receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
     
-        print("GenesisModelIpfsHash set in DINCoordinator contract with hash: ", model_hash)
+        print("GenesisModelIpfsHash set in DINTaskCoordinator contract with hash: ", model_hash)
         
-        set_key(".env", "DINCoordinator_Contract_Address", dincoordinator_contract_address)
+
         set_key(".env", "IS_GenesisModelCreated", "True")
         set_key(".env", "GenesisModelIpfsHash", model_hash)
-        
-        env_config = dotenv_values(".env")
-        dincoordinator_address = env_config.get("DINCoordinator_Contract_Address")
-        
+        set_key(".env", "GIstate", "Genesis Model Created")
+    
+
         
         return {"message": "Genesis model created & uploaded to IPFS successfully, logged in smart contract",
                 "status": "success",
                 "IS_GenesisModelCreated": True,
-                "model_ipfs_hash": model_hash,
-                "dincordinator_address": dincoordinator_address}
+                "model_ipfs_hash": model_hash,}
     except Exception as e:
         return {"message": str(e),
                 "status": "error",
                 "IS_GenesisModelCreated": False,
-                "model_ipfs_hash": None,
-                "dincordinator_address": None}
+                "model_ipfs_hash": None}
 
+@router.post("/validators/getValidatorsState")
+def get_validators_state():
+    try:
+        env_config = dotenv_values(".env")
+        
+        w3 = get_w3()
+        
+        Validator_Adresses = w3.eth.accounts[2+9:2+9+12]
+        
+        DinToken_Contract_Address = env_config.get("DINToken_Contract_Address")
+        DinValidatorStake_Contract_Address = env_config.get("DINValidatorStake_Contract_Address")
+        
+        print("DINValidatorStake_Contract_Address: ", DinValidatorStake_Contract_Address)
+        
+        if DinToken_Contract_Address is  not None:
+            deployed_DINtokenContract = get_DINtokenContract_Instance(dintoken_address=DinToken_Contract_Address)
+        
+        ValidatoDintokenBalances = []
+        ValidatoETHBalances = []
+        ValidatorDinStakedTokens = []
+        
+        for validator_address in Validator_Adresses:
+            
+            if DinToken_Contract_Address is  not None:
+                validator_dintoken_balance = deployed_DINtokenContract.functions.balanceOf(validator_address).call()
+                ValidatoDintokenBalances.append(validator_dintoken_balance)
+            else:
+                ValidatoDintokenBalances.append(0)
+            
+            validator_eth_balance = w3.from_wei(w3.eth.get_balance(validator_address), 'ether')
+            ValidatoETHBalances.append(validator_eth_balance)
+            
+            if DinValidatorStake_Contract_Address is not None:
+                deployed_DINValidatorStakeContract = get_DINValidatorStake_Instance(dinvalidatorstake_address=DinValidatorStake_Contract_Address)
+                validator_din_staked_tokens = deployed_DINValidatorStakeContract.functions.getStake(validator_address).call()
+                print(validator_address, " --- validator_din_staked_tokens: ", validator_din_staked_tokens)
+                ValidatorDinStakedTokens.append(validator_din_staked_tokens)
+            else:
+                ValidatorDinStakedTokens.append(0)
+        
+        
+        
+        return {"message": "Validators state fetched successfully",
+                "status": "success",
+                "validator_addresses": Validator_Adresses,
+                "validator_dintoken_balances": ValidatoDintokenBalances,
+                "validator_eth_balances": ValidatoETHBalances,
+                "DINValidatorStakeAddress": DinValidatorStake_Contract_Address,
+                "validator_din_staked_tokens": ValidatorDinStakedTokens, 
+                "dintoken_address": DinToken_Contract_Address}
+    except Exception as e:
+        return {"message": str(e),
+                "status": "error"}
+        
+        
+@router.post("/validators/buyDINTokens")
+def buy_dintokens():
+    try:
+        env_config = dotenv_values(".env")
+        w3 = get_w3()
+        
+        
+        Validator_Adresses = w3.eth.accounts[2+9:2+9+12]
+        
+        DinToken_Contract_Address = env_config.get("DINToken_Contract_Address")
+        
+        deployed_DINtokenContract = get_DINtokenContract_Instance(dintoken_address=DinToken_Contract_Address)
+        
+        dincoordinator_contract_address = env_config.get("DINCoordinator_Contract_Address")
+        
+        deployed_dincoordinator = get_DINCoordinator_Instance(dincoordinator_address=dincoordinator_contract_address) 
+        
+        for validator_address in Validator_Adresses:
+            tx_hash = deployed_dincoordinator.functions.depositAndMint().transact({
+                "from": validator_address,
+                "gas": 3000000,
+                "gasPrice": w3.to_wei("5", "gwei"),
+                "value": w3.to_wei("1", "ether"),
+            })
+            receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+            
+            time.sleep(0.1)
+        
+        
+        ValidatoDintokenBalances = []
+        ValidatoETHBalances = []
+        
+        for validator_address in Validator_Adresses:
+            validator_dintoken_balance = deployed_DINtokenContract.functions.balanceOf(validator_address).call()
+            ValidatoDintokenBalances.append(validator_dintoken_balance)
+            
+            validator_eth_balance = w3.from_wei(w3.eth.get_balance(validator_address), 'ether')
+            ValidatoETHBalances.append(validator_eth_balance)
+        
+        
+        
+        return {"message": "DIN tokens bought successfully",
+                "status": "success",
+                "validator_addresses": Validator_Adresses,
+                "validator_dintoken_balances": ValidatoDintokenBalances,
+                "validator_eth_balances": ValidatoETHBalances}
+    except Exception as e:
+        return {"message": str(e),
+                "status": "error"}
+        
+class ValidatorAddressRequest(BaseModel):
+    validator_address: str
+
+@router.post("/validators/buyDINTokensSingle")
+def buy_dintokens_single(request: ValidatorAddressRequest):
+    try:
+        validator_address = request.validator_address
+        env_config = dotenv_values(".env")
+        w3 = get_w3()
+        print("Validator address:", validator_address)
+        DinToken_Contract_Address = env_config.get("DINToken_Contract_Address")
+        
+        deployed_DINtokenContract = get_DINtokenContract_Instance(dintoken_address=DinToken_Contract_Address)
+        
+        dincoordinator_contract_address = env_config.get("DINCoordinator_Contract_Address")
+        
+        deployed_dincoordinator = get_DINCoordinator_Instance(dincoordinator_address=dincoordinator_contract_address) 
+        
+        tx_hash = deployed_dincoordinator.functions.depositAndMint().transact({
+            "from": validator_address,
+            "gas": 3000000,
+            "gasPrice": w3.to_wei("5", "gwei"),
+            "value": w3.to_wei("1", "ether"),
+        })
+        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+        
+        time.sleep(0.1)
+        
+        return {"message": "DIN tokens bought successfully",
+                "status": "success"}
+        
+        
+    except Exception as e:
+        return {"message": str(e),
+                "status": "error"}
+        
+@router.post("/validators/stakeDINTokens")
+def stake_dintokens():
+    try:
+        env_config = dotenv_values(".env")
+        w3 = get_w3()
+        
+        Validator_Adresses = w3.eth.accounts[2+9:2+9+12]
+        
+        DinToken_Contract_Address = env_config.get("DINToken_Contract_Address")
+        
+        deployed_DINtokenContract = get_DINtokenContract_Instance(dintoken_address=DinToken_Contract_Address)
+        
+        DinValidatorStake_Contract_Address = env_config.get("DINValidatorStake_Contract_Address")
+        
+        deployed_DINValidatorStakeContract = get_DINValidatorStake_Instance(dinvalidatorstake_address=DinValidatorStake_Contract_Address)
+        
+        MIN_STAKE = 1000000
+        
+        for validator_address in Validator_Adresses:
+            
+            validator_Din_token_balance = deployed_DINtokenContract.functions.balanceOf(validator_address).call()
+            
+            if validator_Din_token_balance >= MIN_STAKE:
+                tx_approval_hash = deployed_DINtokenContract.functions.approve(DinValidatorStake_Contract_Address, MIN_STAKE).transact({"from": validator_address})
+                
+                receipt = w3.eth.wait_for_transaction_receipt(tx_approval_hash)
+                
+                tx_stake_hash = deployed_DINValidatorStakeContract.functions.stake(MIN_STAKE).transact({"from": validator_address})
+                
+                receipt = w3.eth.wait_for_transaction_receipt(tx_stake_hash)
+      
+        return {"message": "DIN tokens staked successfully",
+                "status": "success"}          
+                
+    except Exception as e:
+        return {"message": str(e),
+                "status": "error"} 
+            
+        
+@router.post("/validators/stakeDINTokensSingle")
+def stake_dintokens_single(request: ValidatorAddressRequest):
+    try:
+        validator_address = request.validator_address
+        env_config = dotenv_values(".env")
+        w3 = get_w3()
+        print("Validator address:", validator_address)
+        
+        DinToken_Contract_Address = env_config.get("DINToken_Contract_Address")
+        
+        deployed_DINtokenContract = get_DINtokenContract_Instance(dintoken_address=DinToken_Contract_Address)
+        
+        DinValidatorStake_Contract_Address = env_config.get("DINValidatorStake_Contract_Address")
+        
+        deployed_DINValidatorStakeContract = get_DINValidatorStake_Instance(dinvalidatorstake_address=DinValidatorStake_Contract_Address)
+        
+        MIN_STAKE = 1000000 
+        
+        validator_Din_token_balance = deployed_DINtokenContract.functions.balanceOf(validator_address).call()
+        
+        print("Validator Din token balance:", validator_Din_token_balance)
+        
+        if validator_Din_token_balance >= MIN_STAKE:
+            tx_approval_hash = deployed_DINtokenContract.functions.approve(DinValidatorStake_Contract_Address, MIN_STAKE).transact({"from": validator_address})
+            
+            receipt = w3.eth.wait_for_transaction_receipt(tx_approval_hash)
+            
+            tx_stake_hash = deployed_DINValidatorStakeContract.functions.stake(MIN_STAKE).transact({"from": validator_address})
+            
+            receipt = w3.eth.wait_for_transaction_receipt(tx_stake_hash)
+      
+        return {"message": "DIN tokens staked successfully",
+                "status": "success"}          
+                
+    except Exception as e:
+        return {"message": str(e),
+                "status": "error"}        
 
 @router.post("/clients/getClientModelsCreatedF")
 def get_client_models_created_f():
@@ -391,19 +601,19 @@ def create_client_models(request: ClientModelCreateRequest):
         w3 = get_w3()
         
         env_config = dotenv_values(".env")
-        DINCoordinator_Contract_Address = env_config.get("DINCoordinator_Contract_Address")
+        DINTaskCoordinator_Contract_Address = env_config.get("DINTaskCoordinator_Contract_Address")
         
-        deployed_DINCoordinatorContract = get_DINCoordinator_Instance(dincoordinator_address=DINCoordinator_Contract_Address)
+        deployed_DINTaskCoordinatorContract = get_DINTaskCoordinator_Instance(dintaskcoordinator_address=DINTaskCoordinator_Contract_Address)
         
-        current_GI = deployed_DINCoordinatorContract.functions.getGI().call()
+        current_GI = deployed_DINTaskCoordinatorContract.functions.getGI().call()
         
         
-        genesis_model_ipfs_hash = deployed_DINCoordinatorContract.functions.getGenesisModelIpfsHash().call()
+        genesis_model_ipfs_hash = deployed_DINTaskCoordinatorContract.functions.getGenesisModelIpfsHash().call()
             
         client_model_ipfs_hashes = train_client_model_and_upload_to_ipfs(genesis_model_ipfs_hash, initial_model_ipfs_hash=None, dp_mode=dp_mode)
             
         for i, ipfs_model_hash in enumerate(client_model_ipfs_hashes):
-            deployed_DINCoordinatorContract.functions.submitLocalModel(ipfs_model_hash, current_GI).transact({
+            deployed_DINTaskCoordinatorContract.functions.submitLocalModel(ipfs_model_hash, current_GI).transact({
                 "from": w3.eth.accounts[i+2],
                 "gas": 3000000,
                 "gasPrice": w3.to_wei("5", "gwei"),
@@ -476,6 +686,33 @@ def deploy_dincoordinator():
                 "DINDAORepresentative_Eth_balance": w3.from_wei(w3.eth.get_balance(w3.eth.accounts[0]), 'ether'),
                 "DINCoordinator_Eth_balance": None}
 
+@router.post("/dindao/deployDinValidatorStake")
+def deploy_dinvalidatorstake():
+    try:
+        env_config = dotenv_values(".env")
+        w3 = get_w3()
+        
+        DINValidatorStake_contract = get_DINValidatorStake_Instance()
+        
+        constructor_tx_hash  = DINValidatorStake_contract.constructor(env_config.get("DINToken_Contract_Address")).transact({
+            "from": w3.eth.accounts[0],
+            "gas": 3000000,
+            "gasPrice": w3.to_wei("5", "gwei"),
+        })
+        constructor_receipt = w3.eth.wait_for_transaction_receipt(constructor_tx_hash)
+        dinvalidatorstake_address = constructor_receipt.contractAddress
+        
+        set_key(".env", "DINValidatorStake_Contract_Address", dinvalidatorstake_address)
+        
+        print("DINValidatorStake contract deployed at:", dinvalidatorstake_address)
+        
+        return {"message": "DinValidatorStake contract deployed successfully",
+                "status": "success",
+                "dinvalidatorstake_address": dinvalidatorstake_address}
+    except Exception as e:
+        return {"message": str(e),
+                "status": "error",
+                "dinvalidatorstake_address": None}
 
 @router.post("/dindao/getDINDAOState")
 def get_dindao_state():
@@ -485,6 +722,7 @@ def get_dindao_state():
         DINToken_Contract_Address = env_config.get("DINToken_Contract_Address")
         w3 = get_w3()
         DINDAORepresentative_address = w3.eth.accounts[0]
+        DINValidatorStake_Contract_Address = env_config.get("DINValidatorStake_Contract_Address")
         
         if DINCoordinator_Contract_Address is None:
             DINCoordinator_Eth_balance = 0
@@ -498,7 +736,8 @@ def get_dindao_state():
                 "dintoken_address": DINToken_Contract_Address,
                 "DINDAORepresentative_address": DINDAORepresentative_address,
                 "DINDAORepresentative_Eth_balance": w3.from_wei(w3.eth.get_balance(DINDAORepresentative_address), 'ether'),
-                "DINCoordinator_Eth_balance": DINCoordinator_Eth_balance}
+                "DINCoordinator_Eth_balance": DINCoordinator_Eth_balance,
+                "DINValidatorStake_address": DINValidatorStake_Contract_Address}
     except Exception as e:
         return {"message": str(e),
                 "status": "error"}
@@ -515,6 +754,10 @@ def resetall():
         unset_key(".env", "ClientModelsCreatedF")
         unset_key(".env", "DINTaskCoordinator_Contract_Address")
         unset_key(".env", "ModelOwner_Address")
+        unset_key(".env", "GIstate")
+        unset_key(".env", "DINValidatorStake_Contract_Address")
+        
+        
         
         
         return {"message": "ALL Reset successfully",

@@ -35,3 +35,19 @@ def get_DINtokenContract_Instance(dintoken_address=None):
     else:
         return w3.eth.contract(abi=dintoken_abi, bytecode=dintoken_bytecode)
     
+    
+def get_DINValidatorStake_Instance(dinvalidatorstake_address=None):
+    w3 = get_w3()
+    if dinvalidatorstake_address is None:
+        dinvalidatorstake_address = dotenv_values(".env").get("DINValidatorStake_Contract_Address")
+    
+    with open("../../hardhat/artifacts/contracts/DinValidatorStake.sol/DinValidatorStake.json") as f:
+        dinvalidatorstake_data = json.load(f)
+        dinvalidatorstake_abi = dinvalidatorstake_data["abi"]
+        dinvalidatorstake_bytecode = dinvalidatorstake_data["bytecode"]
+    
+    if dinvalidatorstake_address:
+        deployed_DINValidatorStakeContract = w3.eth.contract(address=dinvalidatorstake_address, abi=dinvalidatorstake_abi)
+        return deployed_DINValidatorStakeContract
+    else:
+        return w3.eth.contract(abi=dinvalidatorstake_abi, bytecode=dinvalidatorstake_bytecode)

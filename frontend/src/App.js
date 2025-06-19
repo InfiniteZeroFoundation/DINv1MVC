@@ -33,6 +33,31 @@ function DINDAO() {
   const [DINDAORepresentative_address, setDINDAORepresentativeAddress] = useState(null);
   const [DINDAORepresentative_Eth_balance, setDINDAORepresentativeEthBalance] = useState(null);
   const [DINCoordinator_Eth_balance, setDINCoordinatorEthBalance] = useState(null);
+  const [DinValidatorStake_address, setDinValidatorStakeAddress] = useState(null);
+
+  const deployDinValidatorStake = async () => {
+    try {
+      const response = await fetch("http://localhost:8000/dindao/deployDinValidatorStake", { method: "POST" });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      console.log(data.message);
+      
+      // Show tooltip
+      if (data.status === "success") {
+        setDinValidatorStakeAddress(data.dinvalidatorstake_address);
+        showTooltip(data.message, false);
+      } else {
+        showTooltip(data.message, true);
+        setDinValidatorStakeAddress(null);
+      }
+    } catch (err) {
+      console.error("Error creating DinValidatorStake:", err);
+      // Show error tooltip
+      showTooltip(err.message, true);
+    }
+  };
 
   const deployDINCoordinator = async () => {
     try {
@@ -80,6 +105,7 @@ function DINDAO() {
       setDINDAORepresentativeAddress(data.DINDAORepresentative_address);
       setDINDAORepresentativeEthBalance(data.DINDAORepresentative_Eth_balance);
       setDINCoordinatorEthBalance(data.DINCoordinator_Eth_balance);
+      setDinValidatorStakeAddress(data.DINValidatorStake_address);
     
     } catch (err) {
       console.error("Error fetching DINDAO state:", err);
@@ -112,6 +138,16 @@ function DINDAO() {
             <h3>DINCoordinator Address: {dincordinator_address || "Not Available"}</h3>
             <h3>DINToken Address: {dintoken_address || "Not Available"}</h3>
             <h3>DINCoordinator ETH Balance: {DINCoordinator_Eth_balance ?? "Not Available"}</h3>
+            <h3>DinValidatorStake Address: {DinValidatorStake_address || "Not Available"}</h3>
+            {dintoken_address && !DinValidatorStake_address && (
+              <button
+                className="button button--primary"
+                onClick={deployDinValidatorStake}
+                style={{ marginTop: "1rem" }}
+              >
+                Deploy DinValidatorStake
+              </button>
+            )}
             {!dincordinator_address && (
               <button
                 className="button button--primary"
@@ -136,7 +172,7 @@ function DINDAO() {
 }
 
 /** ======================= ModelOwner TAB ======================= */
-function ModelOwnerTab() {
+function ModelOwnerTab({ setGIstate }) {
   const [loading, setLoading] = useState(true);
   const { showTooltip } = useContext(TooltipContext);
 
@@ -147,6 +183,7 @@ function ModelOwnerTab() {
   const [dintaskcoordinatorDintokenBalance, setDintaskcoordinatorDintokenBalance] = useState(null);
   const [genesisModelSetF, setGenesisModelF] = useState(false);
   const [genesisModelIpfsHash, setGenesisModelIpfsHash] = useState(null);
+
 
 
 
@@ -190,6 +227,7 @@ function ModelOwnerTab() {
       console.log("Deployed DINTaskCoordinator:", data);
       setDintaskcoordinatorAddress(data.dintaskcoordinator_contract_address);
       setDintaskcoordinatorDintokenBalance(data.dintaskcoordinator_dintoken_balance);
+      setGIstate(data.GIstate);
       showTooltip(data.message, false);
     } catch (err) {
       console.error("Error deploying DINTaskCoordinator:", err);
@@ -200,7 +238,27 @@ function ModelOwnerTab() {
   };
 
   const createGenesisModel = async () => {
-    
+    try {
+      const response = await fetch("http://localhost:8000/modelowner/createGenesisModel", { method: "POST" }); // Assuming this is a POST request
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      console.log(data.message);
+      
+      // Show tooltip
+      if (data.status === "success") {
+        setGenesisModelF(data.IS_GenesisModelCreated);
+        setGenesisModelIpfsHash(data.model_ipfs_hash);
+        showTooltip(data.message, false);
+      } else {
+        showTooltip(data.message, true);
+      }
+    } catch (err) {
+      console.error("Error creating genesis model:", err);
+      // Show error tooltip
+      showTooltip(err.message, true);
+    }
   }
 
   const depositAndMintDINTokens = async () => {
@@ -288,6 +346,19 @@ function ModelOwnerTab() {
               <>
                 <h3>Genesis Model Created</h3>
                 <p>Genesis Model IPFS Hash: {genesisModelIpfsHash}</p>
+                {/* {GIstate ? (
+                  <>
+                  <div style={{ marginTop: "1rem", marginBottom: "1rem", display: "flex", justifyContent: "center" }}>
+                  <button className="button button--primary" onClick={startGI}>
+                    Start GI
+                  </button>
+                </div>
+                  </>
+                ):(
+                <>
+                </>
+                )} */}
+                
               </>
             ) : (
               <button className="button button--primary" onClick={createGenesisModel}>
@@ -431,9 +502,208 @@ function ClientsTab() {
 
 /** ======================= Validator TAB ======================= */
 function ValidatorsTab() {
+
+  const [loading, setLoading] = useState(true);
+  const { showTooltip } = useContext(TooltipContext);
+  const [validatorAddresses, setValidatorAddresses] = useState([]);
+  const [validatorDintokenBalances, setValidatorDintokenBalances] = useState([]);
+  const [validatorETHBalances, setValidatorETHBalances] = useState([]);
+  const [DINValidatorStakeAddress, setDINValidatorStakeAddress] = useState(null);
+  const [validatorDinStakedTokens, setValidatorDinStakedTokens] = useState([]);
+  const [dintoken_address, setDintokenAddress] = useState(null);
+
+
+  const fetchValidatorsState = async () => {
+    try {
+      const response = await fetch("http://localhost:8000/validators/getValidatorsState", {
+        method: "POST",
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+      const data = await response.json();
+      console.log("Fetched validators state:", data);
+
+      setLoading(false);
+      setValidatorAddresses(data.validator_addresses);
+      setValidatorDintokenBalances(data.validator_dintoken_balances);
+      setValidatorETHBalances(data.validator_eth_balances);
+      setDINValidatorStakeAddress(data.DINValidatorStakeAddress);
+      setValidatorDinStakedTokens(data.validator_din_staked_tokens);
+      setDintokenAddress(data.dintoken_address);
+    } catch (err) {
+      console.error("Error fetching validators state:", err);
+      showTooltip(err.message, true);
+    }
+  };
+
+  useEffect(() => {
+    fetchValidatorsState();
+  }, []);
+
+  const buyDINTokens = async () => {
+    try {
+      const response = await fetch("http://localhost:8000/validators/buyDINTokens", {
+        method: "POST",
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+      const data = await response.json();
+      console.log("Fetched validators state:", data);
+
+      setLoading(false);
+      setValidatorAddresses(data.validator_addresses);
+      setValidatorDintokenBalances(data.validator_dintoken_balances);
+      setValidatorETHBalances(data.validator_eth_balances);
+    } catch (err) {
+      console.error("Error fetching validators state:", err);
+      showTooltip(err.message, true);
+    }
+  };
+
+  const stakeDINTokens = async () => {
+    try {
+      const response = await fetch("http://localhost:8000/validators/stakeDINTokens", {
+        method: "POST",
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+      const data = await response.json();
+      console.log("Fetched validators state:", data);
+
+      setLoading(false);
+      showTooltip(data.message, false);
+      setTimeout(() => {
+        fetchValidatorsState();
+      }, 1000);
+
+    } catch (err) {
+      console.error("Error fetching validators state:", err);
+      showTooltip(err.message, true);
+    }
+  };
+
+  const stakeDINTokensSingle = async (address) => {
+    try {
+      const response = await fetch("http://localhost:8000/validators/stakeDINTokensSingle", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          validator_address: address,
+        }),
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+      const data = await response.json();
+      console.log("DIN Token Stake done successfully:", data);
+
+      setLoading(false);
+      showTooltip(data.message, false);
+      setTimeout(() => {
+        fetchValidatorsState();
+      }, 1000);
+
+    } catch (err) {
+      console.error("Error staking DIN Tokens:", err);
+      showTooltip(err.message, true);
+    }
+  };
+
+  const buyDINTokensSingle = async (address) => {
+    try {
+      console.log("Buy DIN Tokens for validator:", address);
+      const response = await fetch("http://localhost:8000/validators/buyDINTokensSingle", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          validator_address: address,
+        }),
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+      const data = await response.json();
+      console.log("Buy DIN Tokens done successfully:", data);
+
+      setLoading(false);
+      showTooltip(data.message, false);
+      setTimeout(() => {
+        fetchValidatorsState();
+      }, 1000);
+
+    } catch (err) {
+      console.error("Error buying DIN Tokens:", err);
+      showTooltip(err.message, true);
+    }
+  };
+
   return (
     <div className="tab-content">
       <h2>Validators</h2>
+      {loading ? (
+        <div>Loading...</div>
+      ) : (
+        <>
+        <div>
+          <div style={{ display: "flex", justifyContent: "center", gap: "1rem", marginBottom: "1rem" }}>
+            <button className="button button--primary" onClick={() => buyDINTokens()}>Buy DIN Tokens</button>
+            {DINValidatorStakeAddress ? (
+              <>
+              <button className="button button--primary" onClick={() => stakeDINTokens()}>Stake DIN Tokens</button>
+              </>
+            ) : (
+              <p> DIN Validator Stake Contract not deployed</p>
+            )}
+            
+          </div>  
+        {validatorAddresses.length > 0 ? (
+          validatorAddresses.map((address, index) => (
+            <div key={index} className="validator">
+              <p>Address - {address} </p><br/> 
+              <p>ETH Balance - {validatorETHBalances[index]} </p><br/> 
+              {dintoken_address ? (
+                <>
+                <p>DIN Token Balance - {validatorDintokenBalances[index]}</p> <br/> 
+                </>
+              ) : (
+                <p>DIN Token Contract not deployed</p>
+              )}
+              
+              <br/>
+              {DINValidatorStakeAddress ? (
+                <p>Staked DIN Tokens - {validatorDinStakedTokens[index]}</p>
+              ) : (
+                <p>DIN Validator Stake Contract not deployed</p>
+              )}
+              
+
+              {DINValidatorStakeAddress ? (
+                <>
+                <div style={{ display: "flex", justifyContent: "center", gap: "1rem", marginBottom: "1rem" }}>
+                <button className="button button--primary" onClick={() => buyDINTokensSingle(address)} >Buy DIN Tokens</button>
+                </div>
+                </>
+              ): (<></>)
+                }
+
+              {DINValidatorStakeAddress ? (
+                <>
+                <div style={{ display: "flex", justifyContent: "center", gap: "1rem", marginBottom: "1rem" }}>
+                <button className="button button--primary" onClick={() => stakeDINTokensSingle(address)} >Stake DIN Tokens</button>
+                </div>
+                </>
+              ): (<></>)
+                }
+            </div>
+          ))
+        ) : (
+          <p>No validators available.</p>
+        )}
+        </div>
+        </>
+      )}
     </div>
   );
 }
@@ -571,7 +841,7 @@ function App() {
             
           <TabBar activeTab={activeTab} setActiveTab={setActiveTab} />
           {activeTab === "DINDAO" && <DINDAO />}
-          {activeTab === "ModelOwner" && <ModelOwnerTab />}
+          {activeTab === "ModelOwner" && <ModelOwnerTab setGIstate={setGIstate}  />}
           {activeTab === "Validators" && <ValidatorsTab />}
           {activeTab === "Clients" && <ClientsTab />}
         </div>
