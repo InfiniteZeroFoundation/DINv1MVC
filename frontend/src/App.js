@@ -172,7 +172,7 @@ function DINDAO() {
 }
 
 /** ======================= ModelOwner TAB ======================= */
-function ModelOwnerTab({ setGIstate }) {
+function ModelOwnerTab({ setGIstate, fetchGIState, GIstate }) {
   const [loading, setLoading] = useState(true);
   const { showTooltip } = useContext(TooltipContext);
 
@@ -183,9 +183,9 @@ function ModelOwnerTab({ setGIstate }) {
   const [dintaskcoordinatorDintokenBalance, setDintaskcoordinatorDintokenBalance] = useState(null);
   const [genesisModelSetF, setGenesisModelF] = useState(false);
   const [genesisModelIpfsHash, setGenesisModelIpfsHash] = useState(null);
-
-
-
+  const [registeredTaskValidators, setRegisteredTaskValidators] = useState([]);
+  const [clientModelsCreatedF, setClientModelsCreatedF] = useState(false);
+  
 
   const fetchModelOwnerState = async () => {
     try {
@@ -207,6 +207,8 @@ function ModelOwnerTab({ setGIstate }) {
 
       setGenesisModelF(data.IS_GenesisModelCreated);
       setGenesisModelIpfsHash(data.model_ipfs_hash);
+      setRegisteredTaskValidators(data.registered_validators);
+      setClientModelsCreatedF(data.client_models_created_f);
     } catch (err) {
       console.error("Error fetching model owner state:", err);
       showTooltip(err.message, true);
@@ -227,7 +229,7 @@ function ModelOwnerTab({ setGIstate }) {
       console.log("Deployed DINTaskCoordinator:", data);
       setDintaskcoordinatorAddress(data.dintaskcoordinator_contract_address);
       setDintaskcoordinatorDintokenBalance(data.dintaskcoordinator_dintoken_balance);
-      setGIstate(data.GIstate);
+      fetchGIState();
       showTooltip(data.message, false);
     } catch (err) {
       console.error("Error deploying DINTaskCoordinator:", err);
@@ -250,12 +252,13 @@ function ModelOwnerTab({ setGIstate }) {
       if (data.status === "success") {
         setGenesisModelF(data.IS_GenesisModelCreated);
         setGenesisModelIpfsHash(data.model_ipfs_hash);
+        fetchGIState();
         showTooltip(data.message, false);
       } else {
         showTooltip(data.message, true);
       }
     } catch (err) {
-      console.error("Error creating genesis model:", err);
+      console.error("Error creatxing genesis model:", err);
       // Show error tooltip
       showTooltip(err.message, true);
     }
@@ -301,9 +304,67 @@ function ModelOwnerTab({ setGIstate }) {
     }
   }
 
+  const startGI = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch("http://localhost:8000/modelowner/startGI", {
+        method: "POST",
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+      const data = await response.json();
+      setModelOwnerEthBalance(data.model_owner_eth_balance);
+      fetchGIState();
+    } catch (err) {
+      console.error("Error starting GI in DINTaskCoordinator:", err);
+      showTooltip(err.message, true);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const startLMsubmissions = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch("http://localhost:8000/modelowner/startLMsubmissions", {
+        method: "POST",
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+      const data = await response.json();
+      fetchGIState();
+    } catch (err) {
+      console.error("Error starting LM submissions:", err);
+      showTooltip(err.message, true);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const closeLMsubmissions = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch("http://localhost:8000/modelowner/closeLMsubmissions", {
+        method: "POST",
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+      const data = await response.json();
+      console.log(data);
+      fetchGIState();
+    } catch (err) {
+      console.error("Error closing LM submissions:", err);
+      showTooltip(err.message, true);
+    } finally {
+      setLoading(false);
+    }
+  }
+  
   useEffect(() => {
     fetchModelOwnerState();
   }, []);
+
+
 
 
   return (
@@ -346,7 +407,7 @@ function ModelOwnerTab({ setGIstate }) {
               <>
                 <h3>Genesis Model Created</h3>
                 <p>Genesis Model IPFS Hash: {genesisModelIpfsHash}</p>
-                {/* {GIstate ? (
+                {GIstate === "Genesis Model Created" || GIstate === "GI ended" ? (
                   <>
                   <div style={{ marginTop: "1rem", marginBottom: "1rem", display: "flex", justifyContent: "center" }}>
                   <button className="button button--primary" onClick={startGI}>
@@ -357,7 +418,33 @@ function ModelOwnerTab({ setGIstate }) {
                 ):(
                 <>
                 </>
-                )} */}
+                )}
+
+                {GIstate === "GI started" && registeredTaskValidators.length >=12? (
+                  <>
+                  <div style={{ marginTop: "1rem", marginBottom: "1rem", display: "flex", justifyContent: "center" }}>
+                  <button className="button button--primary" onClick={startLMsubmissions}>
+                  Start LM submissions
+                  </button>
+                </div>
+                  </>
+                ):(
+                <>
+                </>
+                )}
+
+                { GIstate === "LM submissions started" && clientModelsCreatedF ? (
+                  <>
+                  <div style={{ marginTop: "1rem", marginBottom: "1rem", display: "flex", justifyContent: "center" }}>
+                  <button className="button button--primary" onClick={closeLMsubmissions}>
+                  Close LM submissions
+                  </button>
+                </div>
+                  </>
+                ):(
+                <>
+                </>
+                )}
                 
               </>
             ) : (
@@ -501,7 +588,7 @@ function ClientsTab() {
 }
 
 /** ======================= Validator TAB ======================= */
-function ValidatorsTab() {
+function ValidatorsTab({GIstate, GI}) {
 
   const [loading, setLoading] = useState(true);
   const { showTooltip } = useContext(TooltipContext);
@@ -511,6 +598,7 @@ function ValidatorsTab() {
   const [DINValidatorStakeAddress, setDINValidatorStakeAddress] = useState(null);
   const [validatorDinStakedTokens, setValidatorDinStakedTokens] = useState([]);
   const [dintoken_address, setDintokenAddress] = useState(null);
+  const [registeredTaskValidators, setRegisteredTaskValidators] = useState([]);
 
 
   const fetchValidatorsState = async () => {
@@ -530,6 +618,7 @@ function ValidatorsTab() {
       setDINValidatorStakeAddress(data.DINValidatorStakeAddress);
       setValidatorDinStakedTokens(data.validator_din_staked_tokens);
       setDintokenAddress(data.dintoken_address);
+      setRegisteredTaskValidators(data.registered_validators);
     } catch (err) {
       console.error("Error fetching validators state:", err);
       showTooltip(err.message, true);
@@ -639,6 +728,57 @@ function ValidatorsTab() {
     }
   };
 
+  const registerTaskValidators = async () => {
+    try {
+      const response = await fetch("http://localhost:8000/validators/registerTaskValidators", {
+        method: "POST",
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+      const data = await response.json();
+      console.log("Task Validators registered successfully:", data);
+
+      setLoading(false);
+      showTooltip(data.message, false);
+      setTimeout(() => {
+        fetchValidatorsState();
+      }, 1000);
+
+    } catch (err) {
+      console.error("Error registering task validators:", err);
+      showTooltip(err.message, true);
+    }
+  };
+
+  const registerTaskValidatorSingle = async (address) => {
+    try {
+      console.log("Register Task Validator for validator:", address);
+      const response = await fetch("http://localhost:8000/validators/registerTaskValidatorSingle", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          validator_address: address,
+        }),
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+      const data = await response.json();
+      console.log("Register Task Validator done successfully:", data);
+
+      setLoading(false);
+      showTooltip(data.message, false);
+      setTimeout(() => {
+        fetchValidatorsState();
+      }, 1000);
+
+    } catch (err) {
+      console.error("Error registering task validator:", err);
+      showTooltip(err.message, true);
+    }
+  };
+
   return (
     <div className="tab-content">
       <h2>Validators</h2>
@@ -647,6 +787,10 @@ function ValidatorsTab() {
       ) : (
         <>
         <div>
+        <div>
+          <h3>Total Registered Validators</h3>
+          <p>{registeredTaskValidators.length} Validators</p>
+        </div>
           <div style={{ display: "flex", justifyContent: "center", gap: "1rem", marginBottom: "1rem" }}>
             <button className="button button--primary" onClick={() => buyDINTokens()}>Buy DIN Tokens</button>
             {DINValidatorStakeAddress ? (
@@ -656,10 +800,14 @@ function ValidatorsTab() {
             ) : (
               <p> DIN Validator Stake Contract not deployed</p>
             )}
-            
+            {GIstate === "GI started" ? (
+              <button className="button button--primary" onClick={() => registerTaskValidators()}>Register Task Validators </button>
+            ) : (
+              <></>
+            )}
           </div>  
-        {validatorAddresses.length > 0 ? (
-          validatorAddresses.map((address, index) => (
+          {validatorAddresses.length > 0 ? (
+           validatorAddresses.map((address, index) => (
             <div key={index} className="validator">
               <p>Address - {address} </p><br/> 
               <p>ETH Balance - {validatorETHBalances[index]} </p><br/> 
@@ -676,6 +824,12 @@ function ValidatorsTab() {
                 <p>Staked DIN Tokens - {validatorDinStakedTokens[index]}</p>
               ) : (
                 <p>DIN Validator Stake Contract not deployed</p>
+              )}
+
+              { (GIstate === "GI started" || GIstate === "LM submissions started") && GI>0  && registeredTaskValidators.length > 0 &&registeredTaskValidators.includes(address) ? (
+                <p><span style={{ color: 'green' }}>✅</span> Registered Validator</p>
+              ) : (
+                <p><span style={{ color: 'red' }}>❌</span> Not Registered Validator</p>
               )}
               
 
@@ -696,11 +850,21 @@ function ValidatorsTab() {
                 </>
               ): (<></>)
                 }
+
+              { (GIstate === "GI started") && GI>0  && (registeredTaskValidators.length > 0 || validatorDinStakedTokens[index] >= 1000000) &&registeredTaskValidators.indexOf(address) === -1 ? (
+                <>
+                <div style={{ display: "flex", justifyContent: "center", gap: "1rem", marginBottom: "1rem" }}>
+                <button className="button button--primary" onClick={() =>registerTaskValidatorSingle(address)} >Register Task Validator</button>
+                </div>
+                </>
+              ) : (
+                (<></>)
+              )}
             </div>
           ))
-        ) : (
-          <p>No validators available.</p>
-        )}
+          ) : (
+            <p>No validators available.</p>
+          )}
         </div>
         </>
       )}
@@ -717,23 +881,26 @@ function App() {
   const [GIstate, setGIstate] = useState("started");
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchGIState = async () => {
-      try {
-        const response = await fetch("http://localhost:8000/modelowner/getGIState");
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data = await response.json();
-        console.log(data);
-        setGI(data.GI);
-        setGIstate(data.GIstate);
-        setLoading(false);
-      } catch (err) {
-        console.error("Error fetching GI state:", err);
-        showTooltip(err.message, true);
+
+  const fetchGIState = async () => {
+    try {
+      const response = await fetch("http://localhost:8000/modelowner/getGIState");
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    };
+      const data = await response.json();
+      console.log(data);
+      setGI(data.GI);
+      setGIstate(data.GIstate);
+      setLoading(false);
+    } catch (err) {
+      console.error("Error fetching GI state:", err);
+      showTooltip(err.message, true);
+    }
+  };
+
+  useEffect(() => {
+    
 
     fetchGIState();
   }, [activeTab]);
@@ -841,8 +1008,8 @@ function App() {
             
           <TabBar activeTab={activeTab} setActiveTab={setActiveTab} />
           {activeTab === "DINDAO" && <DINDAO />}
-          {activeTab === "ModelOwner" && <ModelOwnerTab setGIstate={setGIstate}  />}
-          {activeTab === "Validators" && <ValidatorsTab />}
+          {activeTab === "ModelOwner" && <ModelOwnerTab setGIstate={setGIstate} fetchGIState={fetchGIState} GIstate={GIstate}/>}
+          {activeTab === "Validators" && <ValidatorsTab GIstate={GIstate} GI={GI}/>}
           {activeTab === "Clients" && <ClientsTab />}
         </div>
       </main>

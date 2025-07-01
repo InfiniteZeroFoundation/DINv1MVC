@@ -28,7 +28,7 @@ router = APIRouter()
 
 RPC_URL = os.getenv("RPC_URL")           # e.g. "http://127.0.0.1:8545"
 
-
+MIN_STAKE = 1000000 
 @router.get("/distribute/dataset")
 def distribute_dataset():
     num_clients = 9
@@ -58,18 +58,33 @@ def get_GIState():
     try:
         env_config = dotenv_values(".env")
         DINTaskCoordinator_Contract_Address = env_config.get("DINTaskCoordinator_Contract_Address")
-        
+        print("getting GI state")
         if DINTaskCoordinator_Contract_Address is None:
             return {"message": "DINTaskCoordinator_Contract_Address not found",
                     "status": "error",
                     "GI": 0,
-                    "GIstate": "contract not deployed"}
+                    "GIstate": "DINTaskCoordinator contract not deployed"}
         else:
             
             deployed_DINTaskCoordinatorContract = get_DINTaskCoordinator_Instance(dintaskcoordinator_address=DINTaskCoordinator_Contract_Address)
             
             GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
-            GIstate = env_config.get("GIstate")
+            
+            GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
+            
+            if GIstate == 0:
+                GIstate = "Awaiting Genesis Model"
+            elif GIstate == 1:
+                GIstate = "Genesis Model Created"
+            elif GIstate == 2:
+                GIstate = "GI started"
+            elif GIstate == 3:
+                GIstate = "LM submissions started"
+            elif GIstate == 4:
+                GIstate = "LM submissions closed"
+            elif GIstate == 5:
+                GIstate = "GI ended"
+            
             
             return {"message": "GI state fetched successfully",
                     "status": "success",
@@ -81,6 +96,32 @@ def get_GIState():
                 "GI": None,
                 "GIstate": None}
 
+@router.post("/modelowner/startGI")
+def start_GI():
+    try:
+        env_config = dotenv_values(".env")
+        
+        w3 = get_w3()
+        
+        model_owner_address = env_config.get("ModelOwner_Address")
+        
+        DINTaskCoordinator_Contract_Address = env_config.get("DINTaskCoordinator_Contract_Address")
+        
+        deployed_DINTaskCoordinatorContract = get_DINTaskCoordinator_Instance(dintaskcoordinator_address=DINTaskCoordinator_Contract_Address)
+        
+        curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
+        tx_hash = deployed_DINTaskCoordinatorContract.functions.startGI(curr_GI+1).transact({
+            "from": model_owner_address,
+            "gas": 3000000,
+            "gasPrice": w3.to_wei("5", "gwei"),
+        })
+        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+        
+        return {"message": "GI started successfully",
+                "status": "success"}
+    except Exception as e:
+        return {"message": str(e),
+                "status": "error"}
 
 @router.post("/modelowner/getModelOwnerState")
 def get_modelowner_state():
@@ -89,6 +130,8 @@ def get_modelowner_state():
         env_config = dotenv_values(".env")
         w3 = get_w3()
         model_owner_address = env_config.get("ModelOwner_Address")
+        
+        client_models_created_f = env_config.get("ClientModelsCreatedF")
         
         if model_owner_address is None:
             model_owner_address = w3.eth.accounts[1] 
@@ -115,7 +158,18 @@ def get_modelowner_state():
         else:
             deployed_DINtokenContract = get_DINtokenContract_Instance(dintoken_address=DINToken_Contract_Address)
             model_owner_dintoken_balance = deployed_DINtokenContract.functions.balanceOf(model_owner_address).call()
+        
+        registered_validators = []
             
+        if DINTaskCoordinator_Contract_Address is not None:
+            deployed_DINTaskCoordinatorContract = get_DINTaskCoordinator_Instance(dintaskcoordinator_address=DINTaskCoordinator_Contract_Address)
+            
+            curr_GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
+            
+            curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
+            
+            if curr_GIstate >= 2 and curr_GIstate < 4:
+                registered_validators = deployed_DINTaskCoordinatorContract.functions.getDINtaskValidators(curr_GI).call()
             
         return {
             "message": "Model owner state fetched successfully",
@@ -126,7 +180,9 @@ def get_modelowner_state():
             "dintaskcoordinator_address": DINTaskCoordinator_Contract_Address,
             "dintaskcoordinator_dintoken_balance": dintaskcoordinator_dintoken_balance,
             "IS_GenesisModelCreated": IS_GenesisModelCreated,
-            "model_ipfs_hash": model_hash
+            "model_ipfs_hash": model_hash,
+            "registered_validators": registered_validators,
+            "client_models_created_f": client_models_created_f
             }
             
     except Exception as e:
@@ -241,8 +297,11 @@ def deploy_dintaskcoordinator():
         w3 = get_w3()
         model_owner_address = env_config.get("ModelOwner_Address")
         DINToken_Contract_Address = env_config.get("DINToken_Contract_Address")
+        
+        DinValidatorStake_Contract_Address = env_config.get("DINValidatorStake_Contract_Address")
+        
         DINTaskCoordinator_contract = get_DINTaskCoordinator_Instance()
-        constructor_tx_hash  = DINTaskCoordinator_contract.constructor(DINToken_Contract_Address).transact({
+        constructor_tx_hash  = DINTaskCoordinator_contract.constructor(DINToken_Contract_Address, DinValidatorStake_Contract_Address).transact({
             "from": model_owner_address,
             "gas": 3000000,
             "gasPrice": w3.to_wei("5", "gwei"),
@@ -253,7 +312,6 @@ def deploy_dintaskcoordinator():
         print("DINTaskCoordinator contract deployed at:", dintaskcoordinator_contract_address)
         
         set_key(".env", "DINTaskCoordinator_Contract_Address", dintaskcoordinator_contract_address)
-        set_key(".env", "GIstate", "Awaiting Genesis Model")
         
         DINToken_contract = get_DINtokenContract_Instance(dintoken_address=DINToken_Contract_Address)
         
@@ -263,7 +321,7 @@ def deploy_dintaskcoordinator():
                 "status": "success",
                 "dintaskcoordinator_contract_address": dintaskcoordinator_contract_address,
                 "dintaskcoordinator_dintoken_balance": dintaskcoordinatorDintokenBalance, 
-                "GIstate": "Awaiting Genesis Model"}
+                }
         
     except Exception as e:
         print("Error deploying DINTaskCoordinator:", e)
@@ -304,7 +362,6 @@ def create_genesis_model():
 
         set_key(".env", "IS_GenesisModelCreated", "True")
         set_key(".env", "GenesisModelIpfsHash", model_hash)
-        set_key(".env", "GIstate", "Genesis Model Created")
     
 
         
@@ -318,6 +375,96 @@ def create_genesis_model():
                 "IS_GenesisModelCreated": False,
                 "model_ipfs_hash": None}
 
+
+@router.post("/modelowner/startGI")
+def start_GI():
+    try:
+        env_config = dotenv_values(".env")
+        
+        w3 = get_w3()
+        
+        model_owner_address = env_config.get("ModelOwner_Address")
+        
+        DINTaskCoordinator_Contract_Address = env_config.get("DINTaskCoordinator_Contract_Address")
+        
+        deployed_DINTaskCoordinatorContract = get_DINTaskCoordinator_Instance(dintaskcoordinator_address=DINTaskCoordinator_Contract_Address)
+        
+        tx_hash = deployed_DINTaskCoordinatorContract.functions.startGI().transact({
+            "from": model_owner_address,
+            "gas": 3000000,
+            "gasPrice": w3.to_wei("5", "gwei"),
+        })
+        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+        
+        return {"message": "GI started successfully",
+                "status": "success"}
+    except Exception as e:
+        return {"message": str(e),
+                "status": "error"}
+
+@router.post("/modelowner/startLMsubmissions")
+def start_LMsubmissions():
+    try:
+        env_config = dotenv_values(".env")
+        
+        w3 = get_w3()
+        
+        model_owner_address = env_config.get("ModelOwner_Address")
+        
+        DINTaskCoordinator_Contract_Address = env_config.get("DINTaskCoordinator_Contract_Address")
+        
+        deployed_DINTaskCoordinatorContract = get_DINTaskCoordinator_Instance(dintaskcoordinator_address=DINTaskCoordinator_Contract_Address)
+        
+        
+        curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
+        tx_hash = deployed_DINTaskCoordinatorContract.functions.startLMsubmissions(curr_GI).transact({
+            "from": model_owner_address,
+            "gas": 3000000,
+            "gasPrice": w3.to_wei("5", "gwei"),
+        })
+        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+        
+        return {"message": "LM submissions started successfully",
+                "status": "success"}
+    except Exception as e:
+        print("Error starting LM submissions:", e)
+        return {"message": str(e),
+                "status": "error"}
+
+@router.post("/modelowner/closeLMsubmissions")
+def close_LMsubmissions():
+    try:
+        print("in closeLMsubmissions")
+        env_config = dotenv_values(".env")
+        
+        w3 = get_w3()
+        
+        model_owner_address = env_config.get("ModelOwner_Address")
+        
+        DINTaskCoordinator_Contract_Address = env_config.get("DINTaskCoordinator_Contract_Address")
+        
+        deployed_DINTaskCoordinatorContract = get_DINTaskCoordinator_Instance(dintaskcoordinator_address=DINTaskCoordinator_Contract_Address)
+        
+        curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
+        
+        GI_state = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
+        
+        if curr_GI < 1 or GI_state != 3:
+            raise Exception("Can not close LM submissions at this time")
+        tx_hash = deployed_DINTaskCoordinatorContract.functions.closeLMsubmissions(curr_GI).transact({
+            "from": model_owner_address,
+            "gas": 3000000,
+            "gasPrice": w3.to_wei("5", "gwei"),
+        })
+        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+        
+        return {"message": "LM submissions closed successfully",
+                "status": "success"}
+    except Exception as e:
+        print("Error closing LM submissions:", e)
+        return {"message": str(e),
+                "status": "error"}
+
 @router.post("/validators/getValidatorsState")
 def get_validators_state():
     try:
@@ -327,10 +474,38 @@ def get_validators_state():
         
         Validator_Adresses = w3.eth.accounts[2+9:2+9+12]
         
+        print("in getValidatorsState")
+        
         DinToken_Contract_Address = env_config.get("DINToken_Contract_Address")
         DinValidatorStake_Contract_Address = env_config.get("DINValidatorStake_Contract_Address")
         
         print("DINValidatorStake_Contract_Address: ", DinValidatorStake_Contract_Address)
+        
+        Dintaskcoordinator_Contract_Address = env_config.get("DINTaskCoordinator_Contract_Address")
+        
+        print("Dintaskcoordinator_Contract_Address: ", Dintaskcoordinator_Contract_Address)
+        
+        registered_validators = []
+        
+        
+        if Dintaskcoordinator_Contract_Address is not None:
+        
+            deployed_DINTaskCoordinatorContract = get_DINTaskCoordinator_Instance(dintaskcoordinator_address=Dintaskcoordinator_Contract_Address)
+            
+            curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
+            
+            print("curr_GI: ", curr_GI)
+            
+            GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
+            
+            print("GIstate: ", GIstate)
+            
+            
+            if curr_GI > 0 and GIstate >= 2:
+                registered_validators = deployed_DINTaskCoordinatorContract.functions.getDINtaskValidators(curr_GI).call()
+                print("registered_validators: ", registered_validators)
+        
+            
         
         if DinToken_Contract_Address is  not None:
             deployed_DINtokenContract = get_DINtokenContract_Instance(dintoken_address=DinToken_Contract_Address)
@@ -367,7 +542,8 @@ def get_validators_state():
                 "validator_eth_balances": ValidatoETHBalances,
                 "DINValidatorStakeAddress": DinValidatorStake_Contract_Address,
                 "validator_din_staked_tokens": ValidatorDinStakedTokens, 
-                "dintoken_address": DinToken_Contract_Address}
+                "dintoken_address": DinToken_Contract_Address,
+                "registered_validators": registered_validators}
     except Exception as e:
         return {"message": str(e),
                 "status": "error"}
@@ -514,7 +690,7 @@ def stake_dintokens_single(request: ValidatorAddressRequest):
         
         deployed_DINValidatorStakeContract = get_DINValidatorStake_Instance(dinvalidatorstake_address=DinValidatorStake_Contract_Address)
         
-        MIN_STAKE = 1000000 
+        
         
         validator_Din_token_balance = deployed_DINtokenContract.functions.balanceOf(validator_address).call()
         
@@ -534,7 +710,92 @@ def stake_dintokens_single(request: ValidatorAddressRequest):
                 
     except Exception as e:
         return {"message": str(e),
-                "status": "error"}        
+                "status": "error"}  
+        
+@router.post("/validators/registerTaskValidators")
+def register_task_validators():
+    try:
+        env_config = dotenv_values(".env")
+        
+        w3 = get_w3()
+        
+        DINTaskCoordinator_Contract_Address = env_config.get("DINTaskCoordinator_Contract_Address")
+        
+        deployed_DINTaskCoordinatorContract = get_DINTaskCoordinator_Instance(dintaskcoordinator_address=DINTaskCoordinator_Contract_Address)
+        
+        DINValidatorStake_Contract_Address = env_config.get("DINValidatorStake_Contract_Address")
+        
+        deployed_DINValidatorStakeContract = get_DINValidatorStake_Instance(dinvalidatorstake_address=DINValidatorStake_Contract_Address)
+        
+        
+        
+        Validator_Adresses = w3.eth.accounts[2+9:2+9+12]
+        
+        curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
+        
+        curr_GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
+        
+        if curr_GIstate != 2:
+            raise Exception("Can not register validators at this time")
+        
+        registered_validators = deployed_DINTaskCoordinatorContract.functions.getDINtaskValidators(curr_GI).call()
+        
+        for validator_address in Validator_Adresses:
+            if validator_address not in registered_validators:
+                
+                validator_stake = deployed_DINValidatorStakeContract.functions.getStake(validator_address).call()
+                
+                if validator_stake >= MIN_STAKE:
+                    tx_hash = deployed_DINTaskCoordinatorContract.functions.registerDINvalidator(curr_GI).transact({"from": validator_address})
+                    
+                    receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+                    
+                    time.sleep(0.1)
+        
+        
+        
+        return {"message": "Task validators registered successfully",
+                "status": "success"}
+    except Exception as e:
+        return {"message": str(e),
+                "status": "error"}
+
+@router.post("/validators/registerTaskValidatorSingle")
+def register_task_validator_single(request: ValidatorAddressRequest):
+    try:
+        validator_address = request.validator_address
+        env_config = dotenv_values(".env")
+        w3 = get_w3()
+        
+        DINTaskCoordinator_Contract_Address = env_config.get("DINTaskCoordinator_Contract_Address")
+        
+        deployed_DINTaskCoordinatorContract = get_DINTaskCoordinator_Instance(dintaskcoordinator_address=DINTaskCoordinator_Contract_Address)
+        
+        curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
+        
+        curr_GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
+        
+        if curr_GIstate != 2:
+            raise Exception("Can not register validators at this time")
+        
+        registered_validators = deployed_DINTaskCoordinatorContract.functions.getDINtaskValidators(curr_GI).call()
+        
+        if validator_address not in registered_validators:
+            validator_stake = deployed_DINValidatorStakeContract.functions.getStake(validator_address).call()
+            
+            if validator_stake >= MIN_STAKE:
+                tx_hash = deployed_DINTaskCoordinatorContract.functions.registerDINvalidator(curr_GI).transact({"from": validator_address})
+                
+                receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+                
+                time.sleep(0.1)
+        
+        
+        return {"message": "Task validator registered successfully",
+                "status": "success"}
+    except Exception as e:
+        return {"message": str(e),
+                "status": "error"}
 
 @router.post("/clients/getClientModelsCreatedF")
 def get_client_models_created_f():
@@ -546,22 +807,22 @@ def get_client_models_created_f():
         w3 = get_w3()
         
         env_config = dotenv_values(".env")
-        DINCoordinator_Contract_Address = env_config.get("DINCoordinator_Contract_Address")
+        DINTaskCoordinator_Contract_Address = env_config.get("DINTaskCoordinator_Contract_Address")
         
         client_model_ipfs_hashes = []
         ClientAddresses = None
         
         if client_models_created_f:
-            deployed_DINCoordinatorContract = get_DINCoordinator_Instance(dincoordinator_address=DINCoordinator_Contract_Address)
+            deployed_DINTaskCoordinatorContract = get_DINTaskCoordinator_Instance(dintaskcoordinator_address=DINTaskCoordinator_Contract_Address)
             
-            current_GI = deployed_DINCoordinatorContract.functions.getGI().call()
+            current_GI = deployed_DINTaskCoordinatorContract.functions.getGI().call()
             
-            ClientAddresses = deployed_DINCoordinatorContract.functions.getClientAddresses(current_GI).call()
+            ClientAddresses = deployed_DINTaskCoordinatorContract.functions.getClientAddresses(current_GI).call()
             
             
             
             for i, client_address in enumerate(ClientAddresses):
-                client_model_ipfs_hash = deployed_DINCoordinatorContract.functions.getClientModel(current_GI, client_address).call()
+                client_model_ipfs_hash = deployed_DINTaskCoordinatorContract.functions.getClientModel(current_GI, client_address).call()
                 client_model_ipfs_hashes.append(client_model_ipfs_hash)
                 
             
@@ -754,7 +1015,6 @@ def resetall():
         unset_key(".env", "ClientModelsCreatedF")
         unset_key(".env", "DINTaskCoordinator_Contract_Address")
         unset_key(".env", "ModelOwner_Address")
-        unset_key(".env", "GIstate")
         unset_key(".env", "DINValidatorStake_Contract_Address")
         
         
