@@ -83,6 +83,16 @@ def get_GIState():
             elif GIstate == 4:
                 GIstate = "LM submissions closed"
             elif GIstate == 5:
+                GIstate = "LM submissions evaluation closed"
+            elif GIstate == 6:
+                GIstate = "T1B created"
+            elif GIstate == 7:
+                GIstate = "T1B aggregation done"
+            elif GIstate == 8:
+                GIstate = "T2B created"
+            elif GIstate == 9:
+                GIstate = "T2B aggregation done"
+            elif GIstate == 10:
                 GIstate = "GI ended"
             
             
@@ -483,26 +493,160 @@ def get_modelowner_client_models():
         
         curr_GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
         
-        if curr_GIstate != 4:
+        if curr_GIstate < 4:
             raise Exception("Can not get client models at this time")
         
-        client_addresses = deployed_DINTaskCoordinatorContract.functions.getClientAddresses(curr_GI).call()
+        lm_submissions = deployed_DINTaskCoordinatorContract.functions.getClientModels(curr_GI).call()
         
-        client_models = []
+        print("lm_submissions: ", lm_submissions)
         
-        for client_address in client_addresses:
-            client_model = deployed_DINTaskCoordinatorContract.functions.clientModels(curr_GI, client_address).call()
-            client_models.append(client_model)
         
-        return {"message": "Client models collected successfully",
+        
+        return {"message": "LM submissions collected successfully",
                 "status": "success",
-                "client_models": client_models,
-                "client_addresses": client_addresses}
+                "lm_submissions": lm_submissions}
     except Exception as e:
-        print("Error collecting client models:", e)
+        print("Error collecting LM submissions:", e)
+        return {"message": str(e),
+                "status": "error"}
+        
+class ClientModelRequest(BaseModel):
+    client_address: str
+    approved: bool
+
+@router.post("/modelowner/approveClientModel")
+def approve_client_model(request: ClientModelRequest):
+    try:
+        env_config = dotenv_values(".env")
+        
+        w3 = get_w3()
+        
+        model_owner_address = env_config.get("ModelOwner_Address")
+        
+        DINTaskCoordinator_Contract_Address = env_config.get("DINTaskCoordinator_Contract_Address")
+        
+        deployed_DINTaskCoordinatorContract = get_DINTaskCoordinator_Instance(dintaskcoordinator_address=DINTaskCoordinator_Contract_Address)
+        
+        curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
+        
+        curr_GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
+        
+        if curr_GIstate != 4:
+            raise Exception("Can not approve client model at this time")
+        
+        deployed_DINTaskCoordinatorContract.functions.evaluateLM(curr_GI, request.client_address, request.approved).transact({
+            "from": model_owner_address,
+            "gas": 3000000,
+            "gasPrice": w3.to_wei("5", "gwei"),
+        })
+        
+        return {"message": "Client model approved successfully",
+                "status": "success"}
+    except Exception as e:
+        print("Error approving client model:", e)
+        return {"message": str(e),
+                "status": "error"}
+    
+@router.post("/modelowner/rejectClientModel")
+def reject_client_model(request: ClientModelRequest):
+    try:
+        env_config = dotenv_values(".env")
+        
+        w3 = get_w3()
+        
+        model_owner_address = env_config.get("ModelOwner_Address")
+        
+        DINTaskCoordinator_Contract_Address = env_config.get("DINTaskCoordinator_Contract_Address")
+        
+        deployed_DINTaskCoordinatorContract = get_DINTaskCoordinator_Instance(dintaskcoordinator_address=DINTaskCoordinator_Contract_Address)
+        
+        curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
+        
+        curr_GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
+        
+        if curr_GIstate != 4:
+            raise Exception("Can not reject client model at this time")
+        
+        deployed_DINTaskCoordinatorContract.functions.evaluateLM(curr_GI, request.client_address, False).transact({
+            "from": model_owner_address,
+            "gas": 3000000,
+            "gasPrice": w3.to_wei("5", "gwei"),
+        })
+        
+        return {"message": "Client model rejected successfully",
+                "status": "success"}
+    except Exception as e:
+        print("Error rejecting client model:", e)
+        return {"message": str(e),
+                "status": "error"}
+    
+@router.post("/modelowner/closeLMsubmissionsEvaluation")
+def closeLMsubmissionsEvaluation():
+    try:
+        env_config = dotenv_values(".env")
+        
+        w3 = get_w3()
+        
+        model_owner_address = env_config.get("ModelOwner_Address")
+        
+        DINTaskCoordinator_Contract_Address = env_config.get("DINTaskCoordinator_Contract_Address")
+        
+        deployed_DINTaskCoordinatorContract = get_DINTaskCoordinator_Instance(dintaskcoordinator_address=DINTaskCoordinator_Contract_Address)
+        
+        curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
+        
+        curr_GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
+        
+        if curr_GIstate != 4:
+            raise Exception("Can not close LM submissions evaluation at this time")
+        
+        deployed_DINTaskCoordinatorContract.functions.finalizeEvaluation(curr_GI).transact({
+            "from": model_owner_address,
+            "gas": 3000000,
+            "gasPrice": w3.to_wei("5", "gwei"),
+        })
+        
+        return {"message": "LM submissions evaluation closed successfully",
+                "status": "success"}
+    except Exception as e:
+        print("Error closing LM submissions evaluation:", e)
         return {"message": str(e),
                 "status": "error"}
 
+@router.post("/modelowner/createTier1Batches")
+def createTier1Batches():
+    try:
+        env_config = dotenv_values(".env")
+        
+        w3 = get_w3()
+        
+        model_owner_address = env_config.get("ModelOwner_Address")
+        
+        DINTaskCoordinator_Contract_Address = env_config.get("DINTaskCoordinator_Contract_Address")
+        
+        deployed_DINTaskCoordinatorContract = get_DINTaskCoordinator_Instance(dintaskcoordinator_address=DINTaskCoordinator_Contract_Address)
+        
+        curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
+        
+        curr_GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
+        
+        if curr_GIstate != 5:
+            raise Exception("Can not create Tier 1 batches at this time")
+        
+        deployed_DINTaskCoordinatorContract.functions.createTier1Batches(curr_GI).transact({
+            "from": model_owner_address,
+            "gas": 3000000,
+            "gasPrice": w3.to_wei("5", "gwei"),
+        })
+        
+        return {"message": "Tier 1 batches created successfully",
+                "status": "success"}
+    except Exception as e:
+        print("Error creating Tier 1 batches:", e)
+        return {"message": str(e),
+                "status": "error"}
+
+    
 @router.post("/validators/getValidatorsState")
 def get_validators_state():
     try:
@@ -848,19 +992,20 @@ def get_client_models_created_f():
         DINTaskCoordinator_Contract_Address = env_config.get("DINTaskCoordinator_Contract_Address")
         
         client_model_ipfs_hashes = []
-        ClientAddresses = None
+        ClientAddresses = []
         
         if client_models_created_f:
             deployed_DINTaskCoordinatorContract = get_DINTaskCoordinator_Instance(dintaskcoordinator_address=DINTaskCoordinator_Contract_Address)
             
             current_GI = deployed_DINTaskCoordinatorContract.functions.getGI().call()
             
-            ClientAddresses = deployed_DINTaskCoordinatorContract.functions.getClientAddresses(current_GI).call()
+            lm_submissions = deployed_DINTaskCoordinatorContract.functions.getClientModels(current_GI).call()
             
+            print("lm_submissions: ", lm_submissions)
             
-            
-            for i, client_address in enumerate(ClientAddresses):
-                client_model_ipfs_hash = deployed_DINTaskCoordinatorContract.functions.getClientModel(current_GI, client_address).call()
+            for i in range(len(lm_submissions)):
+                client_model_ipfs_hash = lm_submissions[i][1]
+                ClientAddresses.append(lm_submissions[i][0])
                 client_model_ipfs_hashes.append(client_model_ipfs_hash)
                 
             

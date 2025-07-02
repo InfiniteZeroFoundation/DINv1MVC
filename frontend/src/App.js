@@ -185,8 +185,8 @@ function ModelOwnerTab({ setGIstate, fetchGIState, GIstate }) {
   const [genesisModelIpfsHash, setGenesisModelIpfsHash] = useState(null);
   const [registeredTaskValidators, setRegisteredTaskValidators] = useState([]);
   const [clientModelsCreatedF, setClientModelsCreatedF] = useState(false);
-  const [clientModels, setClientModels] = useState([]);
-  const [clientAddresses, setClientAddresses] = useState([]);
+  const [lmSubmissions, setLMSubmissions] = useState([]);
+
   
 
   const fetchModelOwnerState = async () => {
@@ -364,7 +364,8 @@ function ModelOwnerTab({ setGIstate, fetchGIState, GIstate }) {
   
   useEffect(() => {
     fetchModelOwnerState();
-  }, []);
+    }
+  , []);
 
 
   const fetchClientModels = async () => {
@@ -377,8 +378,7 @@ function ModelOwnerTab({ setGIstate, fetchGIState, GIstate }) {
 
       const data = await response.json();
       console.log(data);
-      setClientModels(data.client_models);
-      setClientAddresses(data.client_addresses);
+      setLMSubmissions(data.lm_submissions);
     } catch (err) {
       console.error("Error fetching client models:", err);
       showTooltip(err.message, true);
@@ -388,18 +388,108 @@ function ModelOwnerTab({ setGIstate, fetchGIState, GIstate }) {
   }
 
   const approveClientModel = async (clientAddress) => {
+    try {
+      setLoading(true);
+      const response = await fetch("http://localhost:8000/modelowner/approveClientModel", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          client_address: clientAddress,
+          approved: true,
+        }),
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
+      const data = await response.json();
+      console.log(data);
+      fetchClientModels();
+    } catch (err) {
+      console.error("Error approving client model:", err);
+      showTooltip(err.message, true);
+    } finally {
+      setLoading(false);
+    }
   }
 
   const rejectClientModel = async (clientAddress) => {
+    try {
+      setLoading(true);
+      const response = await fetch("http://localhost:8000/modelowner/rejectClientModel", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          client_address: clientAddress,
+          approved: false,
+        }),
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
+      const data = await response.json();
+      console.log(data);
+      fetchClientModels();
+    } catch (err) {
+      console.error("Error rejecting client model:", err);
+      showTooltip(err.message, true);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
-    if (GIstate === "LM submissions closed" && clientModelsCreatedF){
+    if (clientModelsCreatedF){
       fetchClientModels();
     }
-  }, [GIstate, clientModelsCreatedF]);
+  }, [clientModelsCreatedF]);
+
+  const closeLMsubmissionsEvaluation = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(
+        "http://localhost:8000/modelowner/closeLMsubmissionsEvaluation",
+        { method: "POST" }
+      );
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+  
+      const data = await response.json();
+      // update balances / state if the backend returns anything
+      fetchGIState();          // refresh global state
+      showTooltip(data.message || "Submissions evaluated", false);
+    } catch (err) {
+      console.error("Error closing LM submissions evaluation:", err);
+      showTooltip(err.message, true);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+
+  const allLmEvaluated =
+  lmSubmissions.length > 0 && lmSubmissions.every(s => s[2] === true);
+
+  const createTier1Batches = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(
+        "http://localhost:8000/modelowner/createTier1Batches",
+        { method: "POST" }
+      );
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+  
+      const data = await response.json();
+      // update balances / state if the backend returns anything
+      fetchGIState();          // refresh global state
+      showTooltip(data.message || "Tier 1 Batch created", false);
+    } catch (err) {
+      console.error("Error creating Tier 1 Batch:", err);
+      showTooltip(err.message, true);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="tab-content">
@@ -477,31 +567,111 @@ function ModelOwnerTab({ setGIstate, fetchGIState, GIstate }) {
                   </>
                 ):null}
 
-                {GIstate === "LM submissions closed" && clientModelsCreatedF ? (
-                  <>
-                  <div>
+                { (GIstate === "LM submissions closed" || GIstate === "LM submissions evaluation closed") && clientModelsCreatedF ? (
+                  <div className="client-models-section">
                     <h3>Client Models</h3>
-                    {clientModels.map((model, index) => (
-                      <div style={{ marginTop: "1rem", marginBottom: "1rem", display: "flex", justifyContent: "center" }} key={index} className="listbox">
-                        <p>{clientAddresses[index]} : {model}</p>
-                        <button 
-                          className="button button--primary"
-                          onClick={() => approveClientModel(clientAddresses[index])}
-                        >
-                          Approve Client Model
-                        </button>
 
-                        <button 
-                          className="button button--danger"
-                          onClick={() => rejectClientModel(clientAddresses[index])}
-                        >
-                          Reject Client Model
-                        </button>
+                    {lmSubmissions.map((submission, index) => (
+                      <div 
+                        key={index} 
+                        className="client-model-card"
+                        style={{
+                          marginTop: "1.5rem",
+                          marginBottom: "1.5rem",
+                          padding: "1rem",
+                          border: "1px solid #ccc",
+                          borderRadius: "8px",
+                          maxWidth: "600px",
+                          marginInline: "auto",
+                          boxShadow: "0 2px 6px rgba(0,0,0,0.1)"
+                        }}
+                      >
+                        <p>
+                          <strong>Client:</strong> {submission[0]} <br />
+                          <strong>Model CID:</strong> {submission[1]}
+                        </p>
+
+                        {!submission[2] ? (
+                          <div style={{ display: "flex", gap: "1rem", justifyContent: "center" }}>
+                            <button
+                              className="button button--primary"
+                              onClick={() => approveClientModel(submission[0])}
+                              style={{
+                                backgroundColor: "#10B981",
+                                color: "white",
+                                fontWeight: "bold",
+                                padding: "0.5rem 1rem",
+                                borderRadius: "4px",
+                                border: "none",
+                                cursor: "pointer"
+                              }}
+                            >
+                              Approve Client Model
+                            </button>
+
+                            <button
+                              className="button button--danger"
+                              onClick={() => rejectClientModel(submission[0])}
+                              style={{
+                                backgroundColor: "#EF4444",
+                                color: "white",
+                                fontWeight: "bold",
+                                padding: "0.5rem 1rem",
+                                borderRadius: "4px",
+                                border: "none",
+                                cursor: "pointer"
+                              }}
+                            >
+                              Reject Client Model
+                            </button>
+                          </div>
+                        ) : (
+                          <h4 style={{ textAlign: "center", margin: 0, color: submission[3] ? "green" : "red" }}>
+                            {submission[3] ? "✅ Approved" : "❌ Rejected"}
+                          </h4>
+                        )}
                       </div>
                     ))}
                   </div>
-                  </>
-                ):null}
+                ) : null}
+
+                {GIstate === "LM submissions closed" && allLmEvaluated && (
+                  <div
+                    style={{
+                      marginTop: "1rem",
+                      marginBottom: "1rem",
+                      display: "flex",
+                      justifyContent: "center"
+                    }}
+                  >
+                    <button
+                      className="button button--primary"
+                      onClick={closeLMsubmissionsEvaluation}
+                    >
+                      Close LM submissions Evaluation
+                    </button>
+                  </div>
+                )}
+
+                {GIstate === "LM submissions evaluation closed" && (
+                  <div
+                    style={{
+                      marginTop: "1rem",
+                      marginBottom: "1rem",
+                      display: "flex",
+                      justifyContent: "center"
+                    }}
+                  >
+                    <button
+                      className="button button--primary"
+                      onClick={createTier1Batches}
+                    >
+                      Create Tier 1 Batches
+                    </button>
+                  </div>
+                )}
+
+
                 
               </>
             ) : (
@@ -881,7 +1051,7 @@ function ValidatorsTab({GIstate, GI}) {
                 <p>DIN Validator Stake Contract not deployed</p>
               )}
 
-              { (GIstate === "GI started" || GIstate === "LM submissions started" || GIstate === "LM submissions closed") && GI>0  && registeredTaskValidators.length > 0 &&registeredTaskValidators.includes(address) ? (
+              { (GIstate === "GI started" || GIstate === "LM submissions started" || GIstate === "LM submissions closed" || GIstate === "LM submissions evaluation closed")  && GI>0  && registeredTaskValidators.length > 0 &&registeredTaskValidators.includes(address) ? (
                 <p><span style={{ color: 'green' }}>✅</span> Registered Validator</p>
               ) : (
                 <p><span style={{ color: 'red' }}>❌</span> Not Registered Validator</p>
