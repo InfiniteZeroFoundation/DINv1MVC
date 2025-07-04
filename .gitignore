@@ -1,0 +1,5 @@
+/fastapi/pyapp/models/clients/*.pth
+fastapi/pyapp/data/MNIST/raw/*
+fastapi/pyapp/Dataset/clients/*.pt
+fastapi/pyapp/Dataset/train/*.pt
+fastapi/pyapp/Dataset/test/*.pt

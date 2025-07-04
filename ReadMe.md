@@ -42,6 +42,7 @@ This project consists of multiple components. Follow the instructions below to s
      ```bash
      cd ./hardhat
      npx hardhat node
+     npx hardhat compile
      ```
    - **RPC Port:** The Hardhat node will start a blockchain node with RPC available at port **8545** ([http://localhost:8545](http://localhost:8545)).
 
