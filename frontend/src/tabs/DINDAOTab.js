@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext } from "react";
 import { TooltipContext } from "../context/TooltipContext";
 
 /** ======================= DINDAO TAB ======================= */
-export default function DINDAOTab() {
+export default function DINDAOTab({GIstate, GI}) {
 
   const [loading, setLoading] = useState(true);
   const { showTooltip } = useContext(TooltipContext);
@@ -12,6 +12,8 @@ export default function DINDAOTab() {
   const [DINDAORepresentative_Eth_balance, setDINDAORepresentativeEthBalance] = useState(null);
   const [DINCoordinator_Eth_balance, setDINCoordinatorEthBalance] = useState(null);
   const [DinValidatorStake_address, setDinValidatorStakeAddress] = useState(null);
+  const [DINTaskCoordinator_address, setDINTaskCoordinatorAddress] = useState(null);
+  const [DINTaskCoordinatorISslasher, setDINTaskCoordinatorISslasher] = useState(null);
 
   const deployDinValidatorStake = async () => {
     try {
@@ -34,6 +36,9 @@ export default function DINDAOTab() {
       console.error("Error creating DinValidatorStake:", err);
       // Show error tooltip
       showTooltip(err.message, true);
+    } finally {
+      fetchDINDAOState();
+      setLoading(false);
     }
   };
 
@@ -66,6 +71,34 @@ export default function DINDAOTab() {
       console.error("Error creating DINDAO:", err);
       // Show error tooltip
       showTooltip(err.message, true);
+    } finally {
+      fetchDINDAOState();
+      setLoading(false);
+    }
+  };
+
+  const addDINTaskCoordinatorAsSlasher = async () => {
+    try {
+      const response = await fetch("http://localhost:8000/dindao/addDINTaskCoordinatorAsSlasher", { method: "POST" });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      console.log(data.message);
+      
+      // Show tooltip
+      if (data.status === "success") {
+        showTooltip(data.message, false);
+      } else {
+        showTooltip(data.message, true);
+      }
+    } catch (err) {
+      console.error("Error adding DINTaskCoordinator as Slasher:", err);
+      // Show error tooltip
+      showTooltip(err.message, true);
+    } finally {
+      fetchDINDAOState();
+      setLoading(false);
     }
   };
 
@@ -84,6 +117,8 @@ export default function DINDAOTab() {
       setDINDAORepresentativeEthBalance(data.DINDAORepresentative_Eth_balance);
       setDINCoordinatorEthBalance(data.DINCoordinator_Eth_balance);
       setDinValidatorStakeAddress(data.DINValidatorStake_address);
+      setDINTaskCoordinatorAddress(data.DINTaskCoordinator_address);
+      setDINTaskCoordinatorISslasher(data.DINTaskCoordinatorISslasher);
     
     } catch (err) {
       console.error("Error fetching DINDAO state:", err);
@@ -136,7 +171,35 @@ export default function DINDAOTab() {
               </button>
             )}
           </div>
-        </> 
+
+          {GI ===0 && GIstate === 0 && DINTaskCoordinator_address && !DINTaskCoordinatorISslasher && (
+            <button
+              className="button button--primary"
+              onClick={addDINTaskCoordinatorAsSlasher}
+              style={{ marginTop: "1rem" }}
+            >
+              Add DINTaskCoordinator as Slasher 
+            </button>
+          )}
+
+          {DINTaskCoordinator_address && DINTaskCoordinatorISslasher && (
+            <div>
+            <h3>
+              DINTaskCoordinator Address:
+              <span>
+                {DINTaskCoordinator_address}
+              </span>
+            </h3>
+          
+            <h3>
+              DINTaskCoordinator is Slasher:
+              <span>
+                {DINTaskCoordinatorISslasher ? 'Enabled ✅' : 'Disabled ❌'}
+              </span>
+            </h3>
+        </div>
+        )}
+        </>
       )}
     </div>
   );

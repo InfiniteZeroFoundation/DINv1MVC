@@ -43,9 +43,6 @@ export default function ValidatorsTab({GIstate, GI}) {
         setAllRegValT1Bs(data.all_reg_val_assigned_t1_batches)
         setAllRegValT2Bs(data.all_reg_val_assigned_t2_batches)
         setAllRegValT1BR(data.all_res_val_t1)
-      }
-
-      if (GIstate >= 9 && GI > 0) {
         setAllRegValT2BR(data.all_res_val_t2)
       }
     } catch (err) {
@@ -255,7 +252,7 @@ export default function ValidatorsTab({GIstate, GI}) {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
       const data = await response.json();
-      console.log("Aggregate Maliciously T1 done successfully:", data);
+      console.log("Validator submit Aggregate Maliciously T1 status:", data);
 
       setLoading(false);
       showTooltip(data.message, false);
@@ -344,7 +341,20 @@ export default function ValidatorsTab({GIstate, GI}) {
   
     // 2. Get the assigned batches for that validator
     const batches = all_reg_val_t1bs[validatorIndex];
-  
+    const cids = all_reg_val_t1br[validatorIndex];
+
+    let curr_cid = null;
+    
+    console.log("validator_address: ", address);
+    console.log("cids: ", cids);
+    if (cids.length > 0) {
+      for (let i = 0; i < cids.length; i++) {
+        if (cids[i] !== null) {
+          curr_cid = cids[i];
+          break;
+        }
+      }
+    }
     return (
       <div>
         <h2>Assigned Tier-1 Batches for {address}</h2>
@@ -382,7 +392,7 @@ export default function ValidatorsTab({GIstate, GI}) {
             </tbody>
           </table>
         )}
-        {GIstate === 7 && batches.length > 0 && !all_reg_val_t1br.includes(address)? (
+        {GIstate === 7 && batches.length > 0 && !curr_cid? (
             <div style={{ display: "flex", gap: "1rem", justifyContent: "center" }}>
             <button
                 className="button button--primary"
@@ -416,6 +426,11 @@ export default function ValidatorsTab({GIstate, GI}) {
                 Aggregate Maliciously T1
               </button>
             </div>
+          )  : GIstate >= 7 && batches.length > 0 && curr_cid ? (
+            // Show submitted CID otherwise if conditions match
+            <div>
+              <h3>Submitted CID: {curr_cid}</h3>
+            </div>
           ) : null}
       </div>
       
@@ -436,9 +451,28 @@ export default function ValidatorsTab({GIstate, GI}) {
     if (validatorIndex === -1) {
       return <div>Validator address not found.</div>;
     }
+
+    console.log("all_reg_val_t2br: ", all_reg_val_t2br);
   
     // 2. Get the assigned Tier-2 batches
     const batches = all_reg_val_t2bs[validatorIndex];
+    const cids = all_reg_val_t2br[validatorIndex];
+
+    let curr_cid = null;
+    
+    console.log("validator_address t2: ", address);
+    console.log("cids t2: ", cids);
+    if (cids === null) {
+      cids = [];
+    }
+    if (cids.length > 0) {
+      for (let i = 0; i < cids.length; i++) {
+        if (cids[i] !== null) {
+          curr_cid = cids[i];
+          break;
+        }
+      }
+    }
   
     return (
       <div>
@@ -471,7 +505,7 @@ export default function ValidatorsTab({GIstate, GI}) {
             </tbody>
           </table>
         )}
-        {GIstate === 9 && batches.length > 0 && !all_reg_val_t2br.includes(address)? (
+        {GIstate === 9 && batches.length > 0 && !curr_cid? (
             <div style={{ display: "flex", gap: "1rem", justifyContent: "center" }}>
             <button
                 className="button button--primary"
@@ -504,6 +538,11 @@ export default function ValidatorsTab({GIstate, GI}) {
               >
                 Aggregate Maliciously T2
               </button>
+            </div>
+          ) : GIstate >= 9 && batches.length > 0 && curr_cid ? (
+            // Show submitted CID otherwise if conditions match
+            <div>
+              <h3>Submitted CID: {curr_cid}</h3>
             </div>
           ) : null}
       </div>

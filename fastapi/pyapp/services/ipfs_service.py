@@ -1,5 +1,7 @@
 
 import requests
+import string
+import random
 
 ipfs_api_url_add = 'http://127.0.0.1:5001/api/v0/add'
 ipfs_api_url_retrieve = 'http://127.0.0.1:5001/api/v0/cat?arg='
@@ -29,3 +31,10 @@ def retrieve_from_ipfs(hash_value, retrieved_file_path):
         print(retrieve_response.text)
 
     return retrieve_response.status_code
+
+def generate_fake_cid_v0(length=44):
+    # IPFS CID v0 starts with 'Qm', then 44 more chars from [A-Za-z2-9]
+    prefix = 'Qm'
+    chars = string.ascii_letters + '123456789'  # base58-like characters
+    random_str = ''.join(random.choices(chars, k=length))
+    return prefix + random_str

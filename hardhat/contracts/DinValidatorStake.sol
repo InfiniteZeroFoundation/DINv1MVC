@@ -8,6 +8,9 @@ contract DinValidatorStake is Ownable {
     
     IERC20 public dintoken;
     uint256 public constant MIN_STAKE = 1000000;
+    mapping(address => bool) public slasher_contracts;
+
+    address public dincoordinator_address;
 
     struct ValidatorInfo {
         uint256 stake;
@@ -21,8 +24,14 @@ contract DinValidatorStake is Ownable {
 
     mapping(address => ValidatorInfo) public validators;
 
-    constructor(address dintoken_address) Ownable(msg.sender) {
+    constructor(address dintoken_address, address _dincoordinator_address) Ownable(msg.sender) {
         dintoken = IERC20(dintoken_address);
+        dincoordinator_address = _dincoordinator_address;
+    }
+
+    modifier only_dincoordinator() {
+        require(msg.sender == dincoordinator_address, "Not DINCoordinator");
+        _;
     }
 
     function stake(uint256 amount) external {
@@ -36,12 +45,31 @@ contract DinValidatorStake is Ownable {
         emit ValidatorStaked(msg.sender, amount);
     }
 
-    function slash(address validator, uint256 amount) external onlyOwner {
+    function add_slasher_contract(address _slasher_contract) external only_dincoordinator {
+        require(slasher_contracts[_slasher_contract] == false, "Slasher contract already added");
+        require(_slasher_contract != address(0), "Invalid slasher contract");
+        slasher_contracts[_slasher_contract] = true;
+    }
+
+    function remove_slasher_contract(address _slasher_contract) external only_dincoordinator {
+        require(slasher_contracts[_slasher_contract] == true, "Slasher contract not added");
+        require(_slasher_contract != address(0), "Invalid slasher contract");
+        slasher_contracts[_slasher_contract] = false;
+    }
+
+    modifier only_slasher_contract() {
+        require(slasher_contracts[msg.sender], "Not a slasher contract");
+        _;
+    }
+
+    function slash(address validator, uint256 amount) external only_slasher_contract {
+        require(amount >= MIN_STAKE, "Insufficient stake to be slashed");
         require(validators[validator].registered, "Not a validator");
         require(validators[validator].stake >= amount, "Not enough stake");
 
         validators[validator].stake -= amount;
-        if (validators[validator].stake == 0) {
+        // validators[validator].blacklisted = true;
+        if (validators[validator].stake < MIN_STAKE) {
             validators[validator].registered = false;
         }
 
@@ -55,7 +83,7 @@ contract DinValidatorStake is Ownable {
         validators[msg.sender].stake -= amount;
         dintoken.transfer(msg.sender, amount);
 
-        if (validators[msg.sender].stake == 0) {
+        if (validators[msg.sender].stake < MIN_STAKE) {
             validators[msg.sender].registered = false;
         }
 

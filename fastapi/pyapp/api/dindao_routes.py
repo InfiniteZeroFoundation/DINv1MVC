@@ -66,9 +66,13 @@ def deploy_dinvalidatorstake():
         env_config = dotenv_values(".env")
         w3 = get_w3()
         
+        
+        dincoordinator_address = env_config.get("DINCoordinator_Contract_Address")
+        dintoken_address = env_config.get("DINToken_Contract_Address")
+        
         DINValidatorStake_contract = get_DINValidatorStake_Instance()
         
-        constructor_tx_hash  = DINValidatorStake_contract.constructor(env_config.get("DINToken_Contract_Address")).transact({
+        constructor_tx_hash  = DINValidatorStake_contract.constructor(dintoken_address, dincoordinator_address).transact({
             "from": w3.eth.accounts[0],
             "gas": 3000000,
             "gasPrice": w3.to_wei("5", "gwei"),
@@ -77,6 +81,25 @@ def deploy_dinvalidatorstake():
         dinvalidatorstake_address = constructor_receipt.contractAddress
         
         set_key(".env", "DINValidatorStake_Contract_Address", dinvalidatorstake_address)
+        
+        
+        
+        deployed_dincoordinator = get_DINCoordinator_Instance(dincoordinator_address=dincoordinator_address)
+        
+        tx_hash = deployed_dincoordinator.functions.add_dinvalidatorStakeContract(dinvalidatorstake_address).transact({
+            "from": w3.eth.accounts[0],
+            "gas": 3000000,
+            "gasPrice": w3.to_wei("5", "gwei"),
+        })
+        
+        if tx_hash is not None:
+            receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+            if receipt.status == 1:
+                print("DinValidatorStake contract added to DINCoordinator contract successfully")
+                set_key(".env", "DINCoordinator_DINValidatorStake_Contract_Address", dinvalidatorstake_address)
+            else:
+                print("Failed to add DinValidatorStake contract to DINCoordinator contract")
+        
         
         print("DINValidatorStake contract deployed at:", dinvalidatorstake_address)
         
@@ -88,16 +111,51 @@ def deploy_dinvalidatorstake():
                 "status": "error",
                 "dinvalidatorstake_address": None}
 
+
+@router.post("/addDINTaskCoordinatorAsSlasher")
+def add_dintaskcoordinator_as_slasher():
+    try:
+        env_config = dotenv_values(".env")
+        w3 = get_w3()
+        
+        dincoordinator_address = env_config.get("DINCoordinator_Contract_Address")
+        
+        deployed_dincoordinator = get_DINCoordinator_Instance(dincoordinator_address=dincoordinator_address)
+        
+        DINTaskCoordinator_Contract_Address = env_config.get("DINTaskCoordinator_Contract_Address")
+        
+        tx_hash = deployed_dincoordinator.functions.add_slasher_contract(DINTaskCoordinator_Contract_Address).transact({
+            "from": w3.eth.accounts[0],
+            "gas": 3000000,
+            "gasPrice": w3.to_wei("5", "gwei"),
+        })
+        
+        if tx_hash is not None:
+            receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+            if receipt.status == 1:
+                print("DINTaskCoordinator added as Slasher to DINCoordinator contract successfully")
+                set_key(".env", "DINTaskCoordinatorISslasher", "True")
+            else:
+                print("Failed to add DINTaskCoordinator as Slasher to DINCoordinator contract")
+        
+        return {"message": "DINTaskCoordinator added as Slasher to DINCoordinator contract successfully",
+                "status": "success"}
+    except Exception as e:
+        return {"message": str(e),
+                "status": "error"}
+
 @router.post("/getDINDAOState")
 def get_dindao_state():
     try:
         env_config = dotenv_values(".env")
         DINCoordinator_Contract_Address = env_config.get("DINCoordinator_Contract_Address")
         DINToken_Contract_Address = env_config.get("DINToken_Contract_Address")
+        DINTaskCoordinator_Contract_Address = env_config.get("DINTaskCoordinator_Contract_Address")
         w3 = get_w3()
         DINDAORepresentative_address = w3.eth.accounts[0]
         DINValidatorStake_Contract_Address = env_config.get("DINValidatorStake_Contract_Address")
-        
+        DINTaskCoordinatorISslasher = env_config.get("DINTaskCoordinatorISslasher")
+        print("DINTaskCoordinatorISslasher", DINTaskCoordinatorISslasher)
         if DINCoordinator_Contract_Address is None:
             DINCoordinator_Eth_balance = 0
         else:
@@ -111,7 +169,9 @@ def get_dindao_state():
                 "DINDAORepresentative_address": DINDAORepresentative_address,
                 "DINDAORepresentative_Eth_balance": w3.from_wei(w3.eth.get_balance(DINDAORepresentative_address), 'ether'),
                 "DINCoordinator_Eth_balance": DINCoordinator_Eth_balance,
-                "DINValidatorStake_address": DINValidatorStake_Contract_Address}
+                "DINValidatorStake_address": DINValidatorStake_Contract_Address,
+                "DINTaskCoordinator_address": DINTaskCoordinator_Contract_Address,
+                "DINTaskCoordinatorISslasher": DINTaskCoordinatorISslasher=="True"}
     except Exception as e:
         return {"message": str(e),
                 "status": "error"}

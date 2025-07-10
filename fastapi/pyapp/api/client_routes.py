@@ -7,6 +7,7 @@ from services.model_architect import get_DINTaskCoordinator_Instance
 from services.DAO_services import get_DINCoordinator_Instance, get_DINtokenContract_Instance, get_DINValidatorStake_Instance
 from services.client_services import train_client_model_and_upload_to_ipfs
 
+from .schemas import Tier2Batch
 
 router = APIRouter(prefix="/clients", tags=["Clients"])
 
@@ -22,6 +23,8 @@ def get_client_models_created_f():
         
         env_config = dotenv_values(".env")
         DINTaskCoordinator_Contract_Address = env_config.get("DINTaskCoordinator_Contract_Address")
+        
+        dp_mode = env_config.get("DPModeUsed")
         
         client_model_ipfs_hashes = []
         ClientAddresses = []
@@ -46,23 +49,25 @@ def get_client_models_created_f():
                 "status": "success",
                 "client_models_created_f": client_models_created_f,
                 "client_model_ipfs_hashes": client_model_ipfs_hashes,
-                "client_addresses": ClientAddresses}
+                "client_addresses": ClientAddresses,
+                "dp_mode": dp_mode}
     except Exception as e:
         return {"message": str(e),
                 "status": "error",
                 "client_models_created_f": False,
                 "client_model_ipfs_hashes": None,
-                "client_addresses": None}
+                "client_addresses": None,
+                "dp_mode": None}
 
 
 class ClientModelCreateRequest(BaseModel):
-    DPMode: str  # Must be one of: "disabled", "beforeTraining", or "afterTraining"
+    selectedDPMode: str  # Must be one of: "disabled", "beforeTraining", or "afterTraining"
 
 @router.post("/createClientModels")
 def create_client_models(request: ClientModelCreateRequest):
     try:
-        
-        dp_mode = request.DPMode
+        print("createClientModels")
+        dp_mode = request.selectedDPMode
         print("DPMode: ", dp_mode)
         
 
@@ -82,11 +87,24 @@ def create_client_models(request: ClientModelCreateRequest):
         deployed_DINTaskCoordinatorContract = get_DINTaskCoordinator_Instance(dintaskcoordinator_address=DINTaskCoordinator_Contract_Address)
         
         current_GI = deployed_DINTaskCoordinatorContract.functions.getGI().call()
+        initial_model_ipfs_hash = None
+        t2_list = []
+        if current_GI > 1:
+            t2_batches_count = 1
+            for i in range(t2_batches_count):
+                (bid, val, fin, cid) = deployed_DINTaskCoordinatorContract.functions.getTier2Batch(current_GI-1, i).call()
+                t2_list.append(Tier2Batch(batch_id=bid, validators=val, finalized=fin, final_cid=cid))
+                 
+
+            t2_batch_gi_minus_1 = t2_list[0]
+            
+            
+            initial_model_ipfs_hash = t2_batch_gi_minus_1.final_cid
         
         
         genesis_model_ipfs_hash = deployed_DINTaskCoordinatorContract.functions.getGenesisModelIpfsHash().call()
             
-        client_model_ipfs_hashes = train_client_model_and_upload_to_ipfs(genesis_model_ipfs_hash, initial_model_ipfs_hash=None, dp_mode=dp_mode)
+        client_model_ipfs_hashes = train_client_model_and_upload_to_ipfs(genesis_model_ipfs_hash, initial_model_ipfs_hash, dp_mode=dp_mode)
             
         for i, ipfs_model_hash in enumerate(client_model_ipfs_hashes):
             deployed_DINTaskCoordinatorContract.functions.submitLocalModel(ipfs_model_hash, current_GI).transact({
@@ -97,6 +115,8 @@ def create_client_models(request: ClientModelCreateRequest):
             
         set_key(".env", "ClientModelsCreatedF", "True")
         
+        set_key(".env", "DPModeUsed", dp_mode)
+        
         return {"message": "Client models created successfully",
                 "status": "success",
                 "client_models_created_f": True,
@@ -106,4 +126,4 @@ def create_client_models(request: ClientModelCreateRequest):
         return {"message": str(e),
                 "status": "error",
                 "client_models_created_f": False}
-        
+ 

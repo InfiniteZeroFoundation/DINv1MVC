@@ -50,6 +50,8 @@ def get_GIState():
             elif GIstate == 10:
                 GIstatedes = "T2B aggregation done"
             elif GIstate == 11:
+                GIstatedes = "Validators slashed"
+            elif GIstate == 12:
                 GIstatedes = "GI ended"
             
             
@@ -104,6 +106,9 @@ def resetall():
         unset_key(".env", "DINTaskCoordinator_Contract_Address")
         unset_key(".env", "ModelOwner_Address")
         unset_key(".env", "DINValidatorStake_Contract_Address")
+        unset_key(".env", "DINCoordinator_DINValidatorStake_Contract_Address")
+        unset_key(".env", "DPModeUsed")
+        unset_key(".env", "DINTaskCoordinatorISslasher")
         
         
         

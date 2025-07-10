@@ -505,6 +505,52 @@ export default function ModelOwnerTab({ fetchGIState, GIstate, GIstatedes }) {
     }
   };
 
+  const slashValidators = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(
+        "http://localhost:8000/modelowner/slashValidators",
+        { method: "POST" }
+      );
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+  
+      const data = await response.json();
+      // update balances / state if the backend returns anything
+      fetchGIState();          // refresh global state
+      console.log(data);
+      fetchTier1n2Batches();
+      showTooltip(data.message || "Validators slashed", false);
+    } catch (err) {
+      console.error("Error slashing validators:", err);
+      showTooltip(err.message, true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const endGI = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(
+        "http://localhost:8000/modelowner/endGI",
+        { method: "POST" }
+      );
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+  
+      const data = await response.json();
+      // update balances / state if the backend returns anything
+      fetchGIState();          // refresh global state
+      console.log(data);
+      fetchTier1n2Batches();
+      showTooltip(data.message || "GI ended", false);
+    } catch (err) {
+      console.error("Error ending GI:", err);
+      showTooltip(err.message, true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   
   return (
@@ -547,7 +593,7 @@ export default function ModelOwnerTab({ fetchGIState, GIstate, GIstatedes }) {
               <>
                 <h3>Genesis Model Created</h3>
                 <p>Genesis Model IPFS Hash: {genesisModelIpfsHash}</p>
-                {GIstate === 1 || GIstate === 11 ? (
+                {GIstate === 1 || GIstate === 12 ? (
                   <>
                   <div style={{ marginTop: "1rem", marginBottom: "1rem", display: "flex", justifyContent: "center" }}>
                   <button className="button button--primary" onClick={startGI}>
@@ -729,6 +775,21 @@ export default function ModelOwnerTab({ fetchGIState, GIstate, GIstatedes }) {
                   <div style={{ marginTop: "1rem", marginBottom: "1rem", display: "flex", justifyContent: "center" }}>
                   <button className="button button--primary" onClick={finalizeT2Aggregation}>
                   Finalize T2 Aggregation
+                  </button>
+                  </div>
+                )}
+
+                {GIstate === 10 && (
+                  <div style={{ marginTop: "1rem", marginBottom: "1rem", display: "flex", justifyContent: "center" }}>
+                  <button className="button button--primary" onClick={slashValidators}>
+                  Slash Validators
+                  </button>
+                  </div>
+                )}
+                {GIstate === 11 && (
+                  <div style={{ marginTop: "1rem", marginBottom: "1rem", display: "flex", justifyContent: "center" }}>
+                  <button className="button button--primary" onClick={endGI}>
+                  End GI
                   </button>
                   </div>
                 )}

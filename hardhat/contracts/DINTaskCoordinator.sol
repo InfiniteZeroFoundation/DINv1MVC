@@ -5,6 +5,7 @@ import "./DinToken.sol"; // Import the DINToken contract interface
 
 interface IDinValidatorStake {
     function getStake(address validator) external view returns (uint256);
+    function slash(address validator, uint256 amount) external;
 }
 
 
@@ -190,6 +191,7 @@ contract DINTaskCoordinator {
         T1AggregationDone,
         T2AggregationStarted,
         T2AggregationDone,
+        ValidatorSlashed,
         GIended
     }
 
@@ -350,7 +352,7 @@ contract DINTaskCoordinator {
             string    memory finalCID
         )
     {
-        require(_GI == GI, "Wrong GI");
+        require(_GI <= GI, "Wrong GI");
         require(_id < tier1Batches[_GI].length, "Batch not found");
         Tier1Batch storage b = tier1Batches[_GI][_id];
         return (b.batchId, b.validators, b.modelIndexes, b.finalized, b.finalCID);
@@ -367,10 +369,12 @@ contract DINTaskCoordinator {
         )
     {
         require(_id == 0, "Only one Tier 2 batch");
-        require(_GI == GI, "Wrong GI");
+        require(_GI <= GI, "Wrong GI");
         Tier2Batch storage b = tier2Batches[_GI][_id];
         return (b.batchId, b.validators, b.finalized, b.finalCID);
     }
+
+
 
     function startT1Aggregation(uint _GI) external onlyOwner {
         require(GIstate == GIstates.T1nT2Bcreated, "Not ready to start T1 aggregation");
@@ -378,9 +382,69 @@ contract DINTaskCoordinator {
         GIstate = GIstates.T1AggregationStarted;
     }
 
+
+    function submitT1Aggregation(
+        uint _GI,
+        uint _batchId,
+        string memory _aggregationCID
+    ) external {
+        require(GIstate == GIstates.T1AggregationStarted, "T1 aggregation not started");
+        require(_GI == GI, "Wrong GI");
+        require(_batchId < tier1Batches[_GI].length, "Invalid batch");
+
+        Tier1Batch storage b = tier1Batches[_GI][_batchId];
+
+        // Verify sender is an assigned validator
+        bool isValidator = false;
+        for (uint i = 0; i < b.validators.length; i++) {
+            if (b.validators[i] == msg.sender) {
+                isValidator = true;
+                break;
+            }
+        }
+        require(isValidator, "Not a batch validator");
+
+        require(!t1Submitted[_GI][_batchId][msg.sender], "Already submitted");
+
+        t1Submitted[_GI][_batchId][msg.sender] = true;
+        t1SubmissionCID[_GI][_batchId][msg.sender] = _aggregationCID;
+
+        // Increment vote count
+        t1Votes[_GI][_batchId][_aggregationCID]++;
+    }
+
+
     function finalizeT1Aggregation(uint _GI) external onlyOwner {
         require(GIstate == GIstates.T1AggregationStarted, "Not ready to finalize T1 aggregation");
         require(_GI == GI, "Wrong GI");
+
+        Tier1Batch[] storage batches = tier1Batches[_GI];
+
+        for (uint i = 0; i < batches.length; i++) {
+            Tier1Batch storage b = batches[i];
+
+            // Determine the CID with the most votes
+            string memory winningCID = "";
+            uint maxVotes = 0;
+
+            // Enumerate unique CIDs
+            for (uint j = 0; j < b.validators.length; j++) {
+                address validator = b.validators[j];
+                if (t1Submitted[_GI][b.batchId][validator]) {
+                    string memory cid = t1SubmissionCID[_GI][b.batchId][validator];
+                    uint votes = t1Votes[_GI][b.batchId][cid];
+                    if (votes > maxVotes) {
+                        maxVotes = votes;
+                        winningCID = cid;
+                    }
+                }
+            }
+
+            require(bytes(winningCID).length > 0, "No submissions");
+            b.finalized = true;
+            b.finalCID = winningCID;
+        }
+
         GIstate = GIstates.T1AggregationDone;
     }
 
@@ -390,14 +454,117 @@ contract DINTaskCoordinator {
         GIstate = GIstates.T2AggregationStarted;
     }   
 
+
+    function submitT2Aggregation(uint _GI, uint _batchId, string memory _aggregationCID) external {
+        require(GIstate == GIstates.T2AggregationStarted, "T2 aggregation not started");
+        require(_GI == GI, "Wrong GI");
+        require(_batchId == 0, "Only one Tier 2 batch");
+
+        Tier2Batch storage b = tier2Batches[_GI][_batchId];
+
+        // Verify sender is an assigned validator
+        bool isValidator = false;
+        for (uint i = 0; i < b.validators.length; i++) {
+            if (b.validators[i] == msg.sender) {
+                isValidator = true;
+                break;
+            }
+        }
+        require(isValidator, "Not a batch validator");
+
+        require(!t2Submitted[_GI][_batchId][msg.sender], "Already submitted");
+
+        t2Submitted[_GI][_batchId][msg.sender] = true;
+        t2SubmissionCID[_GI][_batchId][msg.sender] = _aggregationCID;
+
+        // Increment vote count
+        t2Votes[_GI][_batchId][_aggregationCID]++;
+    }
+
     function finalizeT2Aggregation(uint _GI) external onlyOwner {
         require(GIstate == GIstates.T2AggregationStarted, "Not ready to finalize T2 aggregation");
         require(_GI == GI, "Wrong GI");
+
+        Tier2Batch[] storage batches = tier2Batches[_GI];
+
+        for (uint i = 0; i < batches.length; i++) {
+            Tier2Batch storage b = batches[i];
+
+            // Determine the CID with the most votes
+            string memory winningCID = "";
+            uint maxVotes = 0;
+
+            // Enumerate unique CIDs
+            for (uint j = 0; j < b.validators.length; j++) {
+                address validator = b.validators[j];
+                if (t2Submitted[_GI][b.batchId][validator]) {
+                    string memory cid = t2SubmissionCID[_GI][b.batchId][validator];
+                    uint votes = t2Votes[_GI][b.batchId][cid];
+                    if (votes > maxVotes) {
+                        maxVotes = votes;
+                        winningCID = cid;
+                    }
+                }
+            }
+
+            require(bytes(winningCID).length > 0, "No submissions");
+            b.finalized = true;
+            b.finalCID = winningCID;
+        }
+
         GIstate = GIstates.T2AggregationDone;
     }   
 
+    function slashValidators(uint _GI) external onlyOwner {
+        require(GIstate == GIstates.T2AggregationDone, "Not ready to slash validators");
+        require(_GI == GI, "Wrong GI");
+
+        uint256 slashAmount = minStake;
+
+        // 1. Tier 1 batches
+        Tier1Batch[] storage t1batches = tier1Batches[_GI];
+        for (uint i = 0; i < t1batches.length; i++) {
+            Tier1Batch storage b = t1batches[i];
+            for (uint j = 0; j < b.validators.length; j++) {
+                address validator = b.validators[j];
+
+                bool submitted = t1Submitted[_GI][b.batchId][validator];
+                bool submittedMatching = false;
+                if (submitted) {
+                    string memory cid = t1SubmissionCID[_GI][b.batchId][validator];
+                    submittedMatching = (keccak256(bytes(cid)) == keccak256(bytes(b.finalCID)));
+                }
+                if (!submitted || !submittedMatching) {
+                    dinvalidatorStakeContract.slash(validator, slashAmount);
+                }
+            }
+        }
+
+         // 2. Tier 2 batches
+        Tier2Batch[] storage t2batches = tier2Batches[_GI];
+        for (uint i = 0; i < t2batches.length; i++) {
+            Tier2Batch storage b = t2batches[i];
+            for (uint j = 0; j < b.validators.length; j++) {
+                address validator = b.validators[j];
+
+                bool submitted = t2Submitted[_GI][b.batchId][validator];
+                bool submittedMatching = false;
+                if (submitted) {
+                    string memory cid = t2SubmissionCID[_GI][b.batchId][validator];
+                    submittedMatching = (keccak256(bytes(cid)) == keccak256(bytes(b.finalCID)));
+                }
+                if (!submitted || !submittedMatching) {
+                    dinvalidatorStakeContract.slash(validator, slashAmount);
+                }
+            }
+        }
+
+        GIstate = GIstates.ValidatorSlashed;
+        
+    }
+
     function endGI(uint _GI) external onlyOwner {
-        require(GIstate == GIstates.T2AggregationDone, "Not ready to end GI");
+        require(GIstate == GIstates.ValidatorSlashed, "Not ready to end GI");
         require(_GI == GI, "Wrong GI");
         GIstate = GIstates.GIended;
     }   

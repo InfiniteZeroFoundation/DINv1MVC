@@ -3,11 +3,17 @@ pragma solidity ^0.8.28;
 
 import "./DinToken.sol"; // Import the DINToken contract interface
 
+interface IDinValidatorStake {
+    function add_slasher_contract(address _slasher_contract) external;
+    function remove_slasher_contract(address _slasher_contract) external;
+}
+    
 contract DinCoordinator {
 
     address public owner;  
     
     DinToken public dintoken;
+    IDinValidatorStake public dinvalidatorStakeContract;
 
     uint256 public constant DIN_PER_ETH = 1_000_000 ; // 1 ETH = 1 million DIN tokens
 
@@ -40,5 +46,16 @@ contract DinCoordinator {
     function withdraw() external onlyOwner {
         payable(owner).transfer(address(this).balance);
     }
+
+    function add_slasher_contract(address _slasher_contract) external onlyOwner {
+        dinvalidatorStakeContract.add_slasher_contract(_slasher_contract);
+    }
     
-}    
+    function remove_slasher_contract(address _slasher_contract) external onlyOwner {
+        dinvalidatorStakeContract.remove_slasher_contract(_slasher_contract);
+    }
+
+    function add_dinvalidatorStakeContract(address _dinvalidatorStakeContract) external onlyOwner {
+        dinvalidatorStakeContract = IDinValidatorStake(_dinvalidatorStakeContract);
+    }
+}

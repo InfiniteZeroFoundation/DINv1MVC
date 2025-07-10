@@ -81,7 +81,8 @@ export default function App() {
             
           <TabBar activeTab={activeTab} setActiveTab={setActiveTab} />
 
-          {activeTab === "DINDAO" && <DINDAOTab />}
+          {activeTab === "DINDAO" && <DINDAOTab GIstate={GIstate} 
+          GI={GI}/>}
 
           {activeTab === "ModelOwner" && <ModelOwnerTab fetchGIState={fetchGIState} GIstate={GIstate} GIstatedes={GIstatedes}/>}
 

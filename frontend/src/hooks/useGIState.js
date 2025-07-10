@@ -14,6 +14,7 @@ export default function useGIState(showTooltip, activeTab) {
       const response = await fetch("http://localhost:8000/getGIState");
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
+      console.log("Fetched GI state:", data);
       setGI(data.GI);
       setGIstate(data.GIstate);
       setGIstatedes(data.GIstatedes);

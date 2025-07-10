@@ -33,6 +33,8 @@ def start_GI():
         })
         receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
         
+        unset_key(".env", "ClientModelsCreatedF")
+        
         return {"message": "GI started successfully",
                 "status": "success"}
     except Exception as e:
@@ -219,7 +221,7 @@ def deploy_dintaskcoordinator():
         DINTaskCoordinator_contract = get_DINTaskCoordinator_Instance()
         constructor_tx_hash  = DINTaskCoordinator_contract.constructor(DINToken_Contract_Address, DinValidatorStake_Contract_Address).transact({
             "from": model_owner_address,
-            "gas": 2*3000000,
+            "gas": int(2.5*3000000),
             "gasPrice": w3.to_wei("5", "gwei"),
         })
         constructor_receipt = w3.eth.wait_for_transaction_receipt(constructor_tx_hash)
@@ -639,4 +641,139 @@ def start_T1Aggregation():
         return {"message": str(e),
                 "status": "error"}
         
+       
+@router.post("/finalizeT1Aggregation")
+def finalize_t1_aggregation():
+    try:
+        w3 = get_w3()
+        
+        env_config = dotenv_values(".env")
+        DINTaskCoordinator_Contract_Address = env_config.get("DINTaskCoordinator_Contract_Address")
+        
+        deployed_DINTaskCoordinatorContract = get_DINTaskCoordinator_Instance(dintaskcoordinator_address=DINTaskCoordinator_Contract_Address)
+        
+        current_GI = deployed_DINTaskCoordinatorContract.functions.getGI().call()
+        
+        deployed_DINTaskCoordinatorContract.functions.finalizeT1Aggregation(current_GI).transact({
+            "from": w3.eth.accounts[1],
+            "gas": 3000000,
+            "gasPrice": w3.to_wei("5", "gwei"),
+        })
+        
+        return {"message": "T1 Aggregation finalized successfully",
+                "status": "success"}
+    except Exception as e:
+        return {"message": str(e),
+                "status": "error"}
      
+@router.post("/startT2Aggregation")
+def start_T2Aggregation():
+    try:
+        env_config = dotenv_values(".env")
+        
+        w3 = get_w3()
+        
+        model_owner_address = env_config.get("ModelOwner_Address")
+        
+        DINTaskCoordinator_Contract_Address = env_config.get("DINTaskCoordinator_Contract_Address")
+        
+        deployed_DINTaskCoordinatorContract = get_DINTaskCoordinator_Instance(dintaskcoordinator_address=DINTaskCoordinator_Contract_Address)
+        
+        curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
+        
+        curr_GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
+        
+        if curr_GIstate != 8:
+            raise Exception("Can not start Tier 2 Aggregation at this time")
+        
+        deployed_DINTaskCoordinatorContract.functions.startT2Aggregation(curr_GI).transact({
+            "from": model_owner_address,
+            "gas": 3000000,
+            "gasPrice": w3.to_wei("5", "gwei"),
+        })
+        
+        return {"message": "Tier 2 Aggregation started successfully",
+                "status": "success"}
+    except Exception as e:
+        print("Error starting Tier 2 Aggregation:", e)
+        return {"message": str(e),
+                "status": "error"}
+
+@router.post("/finalizeT2Aggregation")
+def finalize_t2_aggregation():
+    try:
+        w3 = get_w3()
+        
+        env_config = dotenv_values(".env")
+        model_owner_address = env_config.get("ModelOwner_Address")
+        
+        DINTaskCoordinator_Contract_Address = env_config.get("DINTaskCoordinator_Contract_Address")
+        
+        deployed_DINTaskCoordinatorContract = get_DINTaskCoordinator_Instance(dintaskcoordinator_address=DINTaskCoordinator_Contract_Address)
+        
+        current_GI = deployed_DINTaskCoordinatorContract.functions.getGI().call()
+        
+        deployed_DINTaskCoordinatorContract.functions.finalizeT2Aggregation(current_GI).transact({
+            "from": model_owner_address,
+            "gas": 3000000,
+            "gasPrice": w3.to_wei("5", "gwei"),
+        })
+        
+        return {"message": "T2 Aggregation finalized successfully",
+                "status": "success"}
+    except Exception as e:
+        return {"message": str(e),
+                "status": "error"}
+
+
+@router.post("/slashValidators")
+def slash_validators():
+    try:
+        w3 = get_w3()
+        
+        env_config = dotenv_values(".env")
+        model_owner_address = env_config.get("ModelOwner_Address")
+        
+        DINTaskCoordinator_Contract_Address = env_config.get("DINTaskCoordinator_Contract_Address")
+        
+        deployed_DINTaskCoordinatorContract = get_DINTaskCoordinator_Instance(dintaskcoordinator_address=DINTaskCoordinator_Contract_Address)
+        
+        current_GI = deployed_DINTaskCoordinatorContract.functions.getGI().call()
+        
+        deployed_DINTaskCoordinatorContract.functions.slashValidators(current_GI).transact({
+            "from": model_owner_address,
+            "gas": 3000000,
+            "gasPrice": w3.to_wei("5", "gwei"),
+        })
+        
+        return {"message": "Validators slashed successfully",
+                "status": "success"}
+    except Exception as e:
+        return {"message": str(e),
+                "status": "error"}
+
+@router.post("/endGI")
+def end_GI():
+    try:
+        w3 = get_w3()
+        
+        env_config = dotenv_values(".env")
+        model_owner_address = env_config.get("ModelOwner_Address")
+        
+        DINTaskCoordinator_Contract_Address = env_config.get("DINTaskCoordinator_Contract_Address")
+        
+        deployed_DINTaskCoordinatorContract = get_DINTaskCoordinator_Instance(dintaskcoordinator_address=DINTaskCoordinator_Contract_Address)
+        
+        current_GI = deployed_DINTaskCoordinatorContract.functions.getGI().call()
+        
+        deployed_DINTaskCoordinatorContract.functions.endGI(current_GI).transact({
+            "from": model_owner_address,
+            "gas": 3000000,
+            "gasPrice": w3.to_wei("5", "gwei"),
+        })
+        
+        return {"message": "GI ended successfully",
+                "status": "success"}
+    except Exception as e:
+        return {"message": str(e),
+                "status": "error"}
