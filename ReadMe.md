@@ -14,7 +14,7 @@ This project consists of multiple components. Follow the instructions below to s
 
 1. **Navigate to the project directory:**
    ```bash
-   cd /home/audumlabs/projects/DINv1MVC
+   cd /home/dinsystems/projects/DINv1MVC
    ```
 
 2. **Start the React App:**
@@ -30,7 +30,7 @@ This project consists of multiple components. Follow the instructions below to s
    - **Directory:** `./fastapi/pyapp`
    - **Start Command:**
      ```bash
-     source /home/audumlabs/projects/pyDIN/.pyDIN/bin/activate
+     source /home/dinsystems/projects/pyDIN/.pyDIN/bin/activate
      cd ./fastapi/pyapp
      uvicorn main:app --host 0.0.0.0 --port 8000 --reload
      ```
@@ -58,7 +58,7 @@ This project consists of multiple components. Follow the instructions below to s
 ## How to Setup Project directories from scratch
 
 ```bash
-cd /home/audumlabs/projects/DINv1MVC
+cd /home/dinsystems/projects/DINv1MVC
 ```
 
 ### hardhat
@@ -74,10 +74,10 @@ npx hardhat init
 
 ```bash
 python3 --version
-cd /home/audumlabs/projects/pyDIN
+cd /home/dinsystems/projects/pyDIN
 python -m venv .pyDIN
-cd /home/audumlabs/projects/DINv1MVC/fastapi/
-source /home/audumlabs/projects/pyDIN/.pyDIN/bin/activate
+cd /home/dinsystems/projects/DINv1MVC/fastapi/
+source /home/dinsystems/projects/pyDIN/.pyDIN/bin/activate
 pip install fastapi uvicorn 
 pip freeze > requirements.txt
 pip install -r requirements.txt
@@ -117,7 +117,7 @@ npm install
 ### Reset Dataset
 
 ```bash
-cd /home/audumlabs/projects/DINv1MVC/fastapi/pyapp
+cd /home/dinsystems/projects/DINv1MVC/fastapi/pyapp
 rm -rf Dataset/clients/*
 rm -rf Dataset/train/*
 rm -rf Dataset/test/*
