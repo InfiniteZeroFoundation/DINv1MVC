@@ -109,7 +109,7 @@ def resetall():
         unset_key(".env", "DINCoordinator_DINValidatorStake_Contract_Address")
         unset_key(".env", "DPModeUsed")
         unset_key(".env", "DINTaskCoordinatorISslasher")
-        
+        unset_key(".env", "TetherMock_Contract_Address")
         
         
         

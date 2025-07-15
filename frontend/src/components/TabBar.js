@@ -1,6 +1,6 @@
 export default function TabBar({ activeTab, setActiveTab }) {
 
-  const tabs = ["DINDAO", "ModelOwner", "Validators", "Clients" ];
+  const tabs = ["Tether Foundation", "DINDAO", "ModelOwner", "Validators", "Clients" ];
   return (
     <div className="tab-bar">
       {tabs.map((tab) => (

@@ -9,7 +9,7 @@ import GlobalStateDisplay from "./components/GlobalStateDisplay";
 import Tooltip from "./components/Tooltip";
 import TabBar from "./components/TabBar";
 
-
+import TetherFoundationTab from "./tabs/TetherFoundationTab";
 import DINDAOTab from "./tabs/DINDAOTab";
 import ModelOwnerTab from "./tabs/ModelOwnerTab";
 import ClientsTab from "./tabs/ClientsTab";
@@ -81,6 +81,7 @@ export default function App() {
             
           <TabBar activeTab={activeTab} setActiveTab={setActiveTab} />
 
+          {activeTab === "Tether Foundation" && <TetherFoundationTab />}
           {activeTab === "DINDAO" && <DINDAOTab GIstate={GIstate} 
           GI={GI}/>}
 

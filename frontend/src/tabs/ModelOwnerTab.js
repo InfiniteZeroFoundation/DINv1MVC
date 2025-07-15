@@ -69,7 +69,10 @@ export default function ModelOwnerTab({ fetchGIState, GIstate, GIstatedes }) {
   const [modelOwnerAddress, setModelOwnerAddress] = useState(null); 
   const [modelOwnerEthBalance, setModelOwnerEthBalance] = useState(null); 
   const [modelOwnerDintokenBalance, setModelOwnerDintokenBalance] = useState(null);
+  const [modelOwnerUSDTBalance, setModelOwnerUSDTBalance] = useState(null);
   const [dintaskcoordinatorAddress, setDintaskcoordinatorAddress] = useState(null);
+  const [MockTetherAddress, setMockTetherAddress] = useState(null);
+  const [dintaskcoordinatorUSDTBalance, setDintaskcoordinatorUSDTBalance] = useState(null);
   const [dintaskcoordinatorDintokenBalance, setDintaskcoordinatorDintokenBalance] = useState(null);
   const [genesisModelSetF, setGenesisModelF] = useState(false);
   const [genesisModelIpfsHash, setGenesisModelIpfsHash] = useState(null);
@@ -101,6 +104,9 @@ export default function ModelOwnerTab({ fetchGIState, GIstate, GIstatedes }) {
       setGenesisModelIpfsHash(data.model_ipfs_hash);
       setRegisteredTaskValidators(data.registered_validators);
       setClientModelsCreatedF(data.client_models_created_f);
+      setModelOwnerUSDTBalance(data.model_owner_usdt_balance);
+      setMockTetherAddress(data.mock_tether_address);
+      setDintaskcoordinatorUSDTBalance(data.dintaskcoordinator_usdt_balance);
     } catch (err) {
       console.error("Error fetching model owner state:", err);
       showTooltip(err.message, true);
@@ -156,17 +162,17 @@ export default function ModelOwnerTab({ fetchGIState, GIstate, GIstatedes }) {
     }
   }
 
-  const depositAndMintDINTokens = async () => {
+  const buyUSDT = async () => {
     try {
       setLoading(true);
-      const response = await fetch("http://localhost:8000/modelowner/depositAndMintDINTokens", {
+      const response = await fetch("http://localhost:8000/modelowner/buyUSDT", {
         method: "POST",
       });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
       const data = await response.json();
-      setModelOwnerDintokenBalance(data.model_owner_dintoken_balance);
       setModelOwnerEthBalance(data.model_owner_eth_balance);
+      setModelOwnerUSDTBalance(data.model_owner_usdt_balance);
     } catch (err) {
       console.error("Error depositing and minting DIN tokens:", err);
       showTooltip(err.message, true);
@@ -185,9 +191,9 @@ export default function ModelOwnerTab({ fetchGIState, GIstate, GIstatedes }) {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
       const data = await response.json();
-      setDintaskcoordinatorDintokenBalance(data.dintaskcoordinator_dintoken_balance);
-      setModelOwnerDintokenBalance(data.model_owner_dintoken_balance);
-      setModelOwnerEthBalance(data.model_owner_eth_balance);
+      console.log(data);
+      setModelOwnerUSDTBalance(data.model_owner_usdt_balance);
+      setDintaskcoordinatorUSDTBalance(data.dintaskcoordinator_usdt_balance);
     } catch (err) {
       console.error("Error depositing reward in DINTaskCoordinator:", err);
       showTooltip(err.message, true);
@@ -564,11 +570,16 @@ export default function ModelOwnerTab({ fetchGIState, GIstate, GIstatedes }) {
             <h3>Model Owner Address: {modelOwnerAddress}</h3>
             <h3>Model Owner ETH Balance: {modelOwnerEthBalance}</h3>
             <h3>Model Owner DINToken Balance: {modelOwnerDintokenBalance}</h3>
+            {MockTetherAddress ? (
+              <h3>Model Owner USDT Balance: {modelOwnerUSDTBalance}</h3>
+            ) : (
+              null
+            )}
           </div>
 
           <div style={{ marginTop: "1rem" }}>
-            <button className="button button--primary" onClick={depositAndMintDINTokens}>
-              Deposit and Mint DIN Tokens
+            <button className="button button--primary" onClick={buyUSDT}>
+              Buy USDT
             </button>
           </div>
 
@@ -577,8 +588,10 @@ export default function ModelOwnerTab({ fetchGIState, GIstate, GIstatedes }) {
               <>
                 <h3>DINTaskCoordinator Address: {dintaskcoordinatorAddress}</h3>
                 <h3>DINToken in DINTaskCoordinator: {dintaskcoordinatorDintokenBalance}</h3>
+                <h3>USDT in DINTaskCoordinator: {dintaskcoordinatorUSDTBalance}</h3>
+
                 <button className="button button--primary" onClick={depositRewardInDINTaskCoordinator}>
-                Deposit Reward in DINTaskCoordinator : 1 M
+                Deposit Reward in DINTaskCoordinator : 1OOO USDT
               </button>
               </>
             ) : (

@@ -6,6 +6,7 @@ from dotenv import load_dotenv, set_key, unset_key, dotenv_values
 from services.blockchain_services import get_w3
 from services.model_architect import getGenesisModelIpfs, get_DINTaskCoordinator_Instance
 from services.DAO_services import get_DINCoordinator_Instance, get_DINtokenContract_Instance, get_DINValidatorStake_Instance
+from services.tetherfoundation_services import get_TetherMock_Instance
 
 from .schemas import Tier1Batch, Tier2Batch
 
@@ -88,22 +89,47 @@ def get_modelowner_state():
             
             if curr_GIstate >= 2 and curr_GIstate < 4:
                 registered_validators = deployed_DINTaskCoordinatorContract.functions.getDINtaskValidators(curr_GI).call()
+        
+       
+        TetherMock_Contract_Address = env_config.get("TetherMock_Contract_Address")    
+        
+        if TetherMock_Contract_Address is None:
+            model_owner_usdt_balance = 0
+            dintaskcoordinator_usdt_balance = 0
+        else:
+            deployed_TetherMockContract = get_TetherMock_Instance(tethermock_address=TetherMock_Contract_Address)
+            model_owner_usdt_balance = deployed_TetherMockContract.functions.balanceOf(model_owner_address).call()
             
+            tethermock_contract_decimals = deployed_TetherMockContract.functions.decimals().call()
+            
+            model_owner_usdt_balance = model_owner_usdt_balance / (10 ** tethermock_contract_decimals)
+            
+            if DINTaskCoordinator_Contract_Address is not None:
+                dintaskcoordinator_usdt_balance = deployed_TetherMockContract.functions.balanceOf(DINTaskCoordinator_Contract_Address).call()
+            else:
+                dintaskcoordinator_usdt_balance = 0
+            
+            dintaskcoordinator_usdt_balance = dintaskcoordinator_usdt_balance / (10 ** tethermock_contract_decimals)
+        
         return {
             "message": "Model owner state fetched successfully",
             "status": "success",
             "model_owner_address": model_owner_address,
             "model_owner_eth_balance": w3.from_wei(w3.eth.get_balance(model_owner_address), 'ether'),
             "model_owner_dintoken_balance": model_owner_dintoken_balance,
+            "model_owner_usdt_balance": model_owner_usdt_balance,
+            "mock_tether_address": TetherMock_Contract_Address,
             "dintaskcoordinator_address": DINTaskCoordinator_Contract_Address,
             "dintaskcoordinator_dintoken_balance": dintaskcoordinator_dintoken_balance,
             "IS_GenesisModelCreated": IS_GenesisModelCreated,
             "model_ipfs_hash": model_hash,
             "registered_validators": registered_validators,
-            "client_models_created_f": client_models_created_f
+            "client_models_created_f": client_models_created_f,
+            "dintaskcoordinator_usdt_balance": dintaskcoordinator_usdt_balance
             }
             
     except Exception as e:
+        print("Error fetching model owner state:", e)
         return {"message": str(e),
                 "status": "error",
                 "model_owner_address": None,
@@ -113,40 +139,61 @@ def get_modelowner_state():
                 "dintaskcoordinator_dintoken_balance": None,
                 "IS_GenesisModelCreated": False,
                 "model_ipfs_hash": None,
-                "IS_GenesisModelCreated": False,
-                "model_ipfs_hash": None
+                "registered_validators": None,
+                "client_models_created_f": False,
+                "model_owner_usdt_balance": None,
+                "dintaskcoordinator_usdt_balance": None,
+                "mock_tether_address": None
                 }
     
 
-@router.post("/depositAndMintDINTokens")
-def deposit_and_mint_dintokens():
+@router.post("/buyUSDT")
+def buy_usdt():
     try:
         env_config = dotenv_values(".env")
         w3 = get_w3()
         model_owner_address = env_config.get("ModelOwner_Address")
-        dincoordinator_address = env_config.get("DINCoordinator_Contract_Address")
-        deploy_dincoordinator_contract = get_DINCoordinator_Instance(dincoordinator_address=dincoordinator_address)
+
         
-        DINToken_Contract_Address = env_config.get("DINToken_Contract_Address")
+        TetherMock_Contract_Address = env_config.get("TetherMock_Contract_Address")    
         
-        tx_hash = deploy_dincoordinator_contract.functions.depositAndMint().transact({
-            "from": model_owner_address,
-            "gas": 3000000,
-            "gasPrice": w3.to_wei("5", "gwei"),
-            "value": w3.to_wei("1", "ether"),
-        })
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-        
-        if DINToken_Contract_Address is None:
-            model_owner_dintoken_balance = 0
+        if TetherMock_Contract_Address is None:
+            model_owner_usdt_balance = 0
         else:
-            deployed_DINtokenContract = get_DINtokenContract_Instance(dintoken_address=DINToken_Contract_Address)
-            model_owner_dintoken_balance = deployed_DINtokenContract.functions.balanceOf(model_owner_address).call()
+            deployed_TetherMockContract = get_TetherMock_Instance(tethermock_address=TetherMock_Contract_Address)
+            
+            TetherFoundationAddress = w3.eth.accounts[2+9+12+1]
+            
+            
+            # 1. Transfer 1 ETH from model owner to Tether Foundation
+            tx_hash = w3.eth.send_transaction({
+                "from": model_owner_address,
+                "to": TetherFoundationAddress,
+                "value": w3.to_wei(1, "ether"),
+            })
+            
+            receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+
+            # Build and send the USDT transfer transaction
+            usdt_tx = deployed_TetherMockContract.functions.transfer(
+                model_owner_address,
+                3000 * (10 ** 6)  # Assuming USDT has 6 decimals
+            ).transact({"from": TetherFoundationAddress})
+            
+            receipt = w3.eth.wait_for_transaction_receipt(usdt_tx)
+            
+            model_owner_usdt_balance = deployed_TetherMockContract.functions.balanceOf(model_owner_address).call()
+        
+            tethermock_contract_decimals = deployed_TetherMockContract.functions.decimals().call()
+            
+            model_owner_usdt_balance = model_owner_usdt_balance / (10 ** tethermock_contract_decimals)
+           
+           
             
         return {"message": "DIN tokens deposited and minted successfully",
                 "status": "success",
-                "model_owner_dintoken_balance": model_owner_dintoken_balance,
-                "model_owner_eth_balance": w3.from_wei(w3.eth.get_balance(model_owner_address), 'ether')}
+                "model_owner_eth_balance": w3.from_wei(w3.eth.get_balance(model_owner_address), 'ether'),
+                "model_owner_usdt_balance": model_owner_usdt_balance}
     except Exception as e:
         return {"message": str(e),
                 "status": "error"}
@@ -160,19 +207,25 @@ def deposit_reward_in_dintaskcoordinator():
         model_owner_address = env_config.get("ModelOwner_Address")
         dintoken_contract_address = env_config.get("DINToken_Contract_Address")
         dintaskcoordinator_contract_address = env_config.get("DINTaskCoordinator_Contract_Address")
+        TetherMock_Contract_Address = env_config.get("TetherMock_Contract_Address")
         deployed_dintoken_contract = get_DINtokenContract_Instance(dintoken_address=dintoken_contract_address)
         
-        amount = 1000000
+        amount = 1000
         
+        deployed_TetherMockContract = get_TetherMock_Instance(tethermock_address=TetherMock_Contract_Address)
+        
+        DECIMALS = deployed_TetherMockContract.functions.decimals().call()
+        
+        amount = amount * (10 ** DECIMALS)
         
         print(" in fn deposit_reward_in_dintaskcoordinator")
         print("dintoken_contract_address:", dintoken_contract_address)
         print("dintaskcoordinator_contract_address:", dintaskcoordinator_contract_address)
         print("model_owner_address:", model_owner_address)
-        print("Approving DINTaskCoordinator contract...")
+        print("Approving DINTaskCoordinator contract... usdt")
         
         
-        tx_hash = deployed_dintoken_contract.functions.approve(dintaskcoordinator_contract_address, amount).transact({
+        tx_hash = deployed_TetherMockContract.functions.approve(dintaskcoordinator_contract_address, amount).transact({
             "from": model_owner_address,
             "gas": 3000000,
             "gasPrice": w3.to_wei("5", "gwei")
@@ -190,18 +243,28 @@ def deposit_reward_in_dintaskcoordinator():
         
         
         
-        if dintoken_contract_address is None:
-            model_owner_dintoken_balance = 0
+        if TetherMock_Contract_Address is None:
+            model_owner_usdt_balance = 0
+            dintaskcoordinator_usdt_balance = 0
         else:
-            deployed_DINtokenContract = get_DINtokenContract_Instance(dintoken_address=dintoken_contract_address)
-            model_owner_dintoken_balance = deployed_DINtokenContract.functions.balanceOf(model_owner_address).call()
+            deployed_TetherMockContract = get_TetherMock_Instance(tethermock_address=TetherMock_Contract_Address)
+            model_owner_usdt_balance = deployed_TetherMockContract.functions.balanceOf(model_owner_address).call()
             
-            dintaskcoordinator_dintoken_balance = deployed_DINtokenContract.functions.balanceOf(dintaskcoordinator_contract_address).call()
+            tethermock_contract_decimals = deployed_TetherMockContract.functions.decimals().call()
+            
+            model_owner_usdt_balance = model_owner_usdt_balance / (10 ** tethermock_contract_decimals)
+            
+            if dintaskcoordinator_contract_address is not None:
+                dintaskcoordinator_usdt_balance = deployed_TetherMockContract.functions.balanceOf(dintaskcoordinator_contract_address).call()
+            else:
+                dintaskcoordinator_usdt_balance = 0
+            
+            dintaskcoordinator_usdt_balance = dintaskcoordinator_usdt_balance / (10 ** tethermock_contract_decimals)
             
         return {"message": "DIN reward deposited successfully",
                 "status": "success",
-                "model_owner_dintoken_balance": model_owner_dintoken_balance,
-                "dintaskcoordinator_dintoken_balance": dintaskcoordinator_dintoken_balance,
+                "model_owner_usdt_balance": model_owner_usdt_balance,
+                "dintaskcoordinator_usdt_balance": dintaskcoordinator_usdt_balance,
                 "model_owner_eth_balance": w3.from_wei(w3.eth.get_balance(model_owner_address), 'ether')}
     except Exception as e:
         print("Error depositing reward:", e)
@@ -218,8 +281,12 @@ def deploy_dintaskcoordinator():
         
         DinValidatorStake_Contract_Address = env_config.get("DINValidatorStake_Contract_Address")
         
+        TetherMock_Contract_Address = env_config.get("TetherMock_Contract_Address")
+        
+        
+        
         DINTaskCoordinator_contract = get_DINTaskCoordinator_Instance()
-        constructor_tx_hash  = DINTaskCoordinator_contract.constructor(DINToken_Contract_Address, DinValidatorStake_Contract_Address).transact({
+        constructor_tx_hash  = DINTaskCoordinator_contract.constructor(TetherMock_Contract_Address, DinValidatorStake_Contract_Address).transact({
             "from": model_owner_address,
             "gas": int(2.5*3000000),
             "gasPrice": w3.to_wei("5", "gwei"),

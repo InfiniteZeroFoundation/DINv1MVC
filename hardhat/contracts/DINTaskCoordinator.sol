@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.28;
 
-import "./DinToken.sol"; // Import the DINToken contract interface
+import "./MockUSDT.sol"; // Import the MockUSDT contract interface
 
 interface IDinValidatorStake {
     function getStake(address validator) external view returns (uint256);
@@ -36,7 +36,7 @@ contract DINTaskCoordinator {
     uint public totalDepositedRewards = 0;
 
     
-    DinToken public dintoken;
+    MockUSDT public mockusdt;
     IDinValidatorStake public dinvalidatorStakeContract;
 
     uint MAX_LM_SUBMISSIONS = 10000;
@@ -45,9 +45,9 @@ contract DINTaskCoordinator {
 
 
 
-    constructor(address dintoken_address, address dinvalidatorStakeContract_address) {
+    constructor(address mockusdt_address, address dinvalidatorStakeContract_address) {
         owner = msg.sender;
-        dintoken = DinToken(dintoken_address);
+        mockusdt = MockUSDT(mockusdt_address);
         dinvalidatorStakeContract = IDinValidatorStake(dinvalidatorStakeContract_address);
         GIstate = GIstates.AwaitingGenesisModel;
     }
@@ -61,9 +61,9 @@ contract DINTaskCoordinator {
     function depositReward(uint _amount) public onlyOwner {
         require(_amount > 0, "Amount must be greater than 0");
 
-        // Pull DIN tokens from sender (ModelOwner)
-        bool success = dintoken.transferFrom(msg.sender, address(this), _amount);
-        require(success, "DINToken transfer failed");
+        // Pull MockUSDT from sender (ModelOwner)
+        bool success = mockusdt.transferFrom(msg.sender, address(this), _amount);
+        require(success, "MockUSDT transfer failed");
 
         totalDepositedRewards += _amount;
         emit RewardDeposited(msg.sender, _amount);
