@@ -21,14 +21,14 @@ contract DINTaskCoordinator {
 
     mapping (uint => address[]) public dinValidators;
 
-    struct LMSubmission {
+    struct LMSubmission {          //  *****to remove
         address client;
         string  modelCID;
         bool    evaluated;   // ← set by evaluateLM()
         bool    approved;    // ← set by evaluateLM()
     }
     
-    mapping(uint => LMSubmission[]) public lmSubmissions;
+    mapping(uint => LMSubmission[]) public lmSubmissions; //  *****to remove
 
     ///  GI  ➜  submitter  ➜  bool
     mapping(uint => mapping(address => bool)) public clientHasSubmitted;

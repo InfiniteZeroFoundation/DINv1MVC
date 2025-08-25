@@ -7,7 +7,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 
 /**
- * DINTaskAuditingBasicPerGI — ultra-simple auditing with per-GI storage
+ * DINTaskAuditing — ultra-simple auditing with per-GI storage
  * - Clients submit local model CIDs (per GI)
  * - Owner creates batches (validatorsPerBatch : modelsPerBatch)
  * - Validators (staked) vote eligibility (majority-of-quorum) and submit 0..100 scores
@@ -35,7 +35,7 @@ contract DINTaskAuditing is Ownable{
     IDINTaskCoordinator public taskCoordinatorC; // optional/loose coupling
     IERC20 public immutable dinTokenC;
 
-
+     string public genesisModelIpfsHash; // genesis model ipfs hash
 
     enum AuditState {
         Idle,
@@ -80,8 +80,8 @@ contract DINTaskAuditing is Ownable{
     mapping(uint => mapping(address => bool)) public clientHasSubmitted;
 
 
-    mapping(uint256 => address[]) public registeredAuditors;               // GI => auditors list
-    mapping(uint256 => mapping(address => bool)) public isRegisteredAuditor; // GI => auditor => flag
+    mapping(uint8 => address[]) public registeredAuditors;               // GI => auditors list
+    mapping(uint8 => mapping(address => bool)) public isRegisteredAuditor; // GI => auditor => flag
 
     struct AuditBatch {
         uint batchId;
@@ -90,10 +90,10 @@ contract DINTaskAuditing is Ownable{
         string  testDataCID;    // shared test data for this batch
     }
     
-    mapping(uint256 => AuditBatch[]) public auditBatches;
+    mapping(uint8 => AuditBatch[]) public auditBatches;
 
 
-    mapping(uint256 =>                   // GI
+    mapping(uint8 =>                   // GI
         mapping(uint =>                  // batchId
             mapping(address =>           // auditor
                 mapping(uint =>          // modelIndex
@@ -103,7 +103,7 @@ contract DINTaskAuditing is Ownable{
         )
     ) public auditScores;
 
-    mapping(uint256 =>                   // GI
+    mapping(uint8 =>                   // GI
         mapping(uint =>                  // batchId
             mapping(address =>           // auditor
                 mapping(uint =>          // modelIndex
@@ -125,7 +125,7 @@ contract DINTaskAuditing is Ownable{
 
 
     
-    modifier onlyAssignedAuditor(uint256 gi, uint batchId, uint modelIndex) {
+    modifier onlyAssignedAuditor(uint8 gi, uint batchId, uint modelIndex) {
         // Get the batch
         require(batchId < auditBatches[gi].length, "AuditBatch: Batch does not exist");
 
@@ -196,7 +196,7 @@ contract DINTaskAuditing is Ownable{
         });
     }
 
-    function _tryFinalizeEligibility(uint256 gi, uint batchId, uint modelIndex) internal {
+    function _tryFinalizeEligibility(uint8 gi, uint batchId, uint modelIndex) internal {
         // Ensure batch exists
         require(batchId < auditBatches[gi].length, "Batch not found");
         AuditBatch storage batch = auditBatches[gi][batchId];
@@ -243,7 +243,7 @@ contract DINTaskAuditing is Ownable{
         emit EligibilityFinalized(gi, batchId, modelIndex, majorityEligible, totalVotes);
     }
     function setAuditScorenEligibility(
-        uint256 gi,
+        uint8 gi,
         uint batchId,
         uint modelIndex,
         uint8 score,
@@ -265,6 +265,22 @@ contract DINTaskAuditing is Ownable{
         // Try to finalize eligibility if quorum is met
         _tryFinalizeEligibility(gi, batchId, modelIndex);
     }
+
+    function assignAuditTestDataset(
+        uint8 gi,
+        uint8 batchId,
+        string calldata testDataCID
+    ) external onlyOwner {
+        // Ensure the batch exists
+        require(batchId < auditBatches[gi].length, "Batch does not exist");
+
+        require(auditBatches[gi][batchId].batchId == batchId, "Batch ID mismatch");
+
+        // Assign the testDataCID
+        auditBatches[gi][batchId].testDataCID = testDataCID;
+
+    }
+
 
 
 
