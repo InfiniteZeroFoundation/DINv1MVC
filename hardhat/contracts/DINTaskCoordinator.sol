@@ -8,11 +8,17 @@ interface IDinValidatorStake {
     function slash(address validator, uint256 amount) external;
 }
 
+interface IDINTaskAuditing {
+
+}
+
 
 contract DINTaskCoordinator {
 
     address public owner;  // model owner
     string public genesisModelIpfsHash; // genesis model ipfs hash
+
+    IDINTaskAuditing public auditingC;
     
     uint public GI = 0; // GlobalIteration
     uint256 public minStake = 1_000_000;
@@ -20,18 +26,6 @@ contract DINTaskCoordinator {
     GIstates public GIstate;
 
     mapping (uint => address[]) public dinValidators;
-
-    struct LMSubmission {          //  *****to remove
-        address client;
-        string  modelCID;
-        bool    evaluated;   // ← set by evaluateLM()
-        bool    approved;    // ← set by evaluateLM()
-    }
-    
-    mapping(uint => LMSubmission[]) public lmSubmissions; //  *****to remove
-
-    ///  GI  ➜  submitter  ➜  bool
-    mapping(uint => mapping(address => bool)) public clientHasSubmitted;
 
     uint public totalDepositedRewards = 0;
 
@@ -52,11 +46,14 @@ contract DINTaskCoordinator {
         GIstate = GIstates.AwaitingGenesisModel;
     }
 
+    
+
     modifier onlyOwner() {
         require(msg.sender == owner, "Not owner");
         _;
     }
 
+    function setAuditing(address a) external onlyOwner { auditing = IDINTaskAuditing(a); }
 
     function depositReward(uint _amount) public onlyOwner {
         require(_amount > 0, "Amount must be greater than 0");
@@ -119,53 +116,13 @@ contract DINTaskCoordinator {
     function submitLocalModel(string memory _clientModel, uint _GI) public {
         require(_GI == GI, "Invalid GI");
         require(GIstate == GIstates.LMSstarted, "Submissions not open");
-        require(!clientHasSubmitted[_GI][msg.sender], "Already submitted");
-        require(lmSubmissions[_GI].length < MAX_LM_SUBMISSIONS, "Max submissions reached");
-
-        lmSubmissions[_GI].push(LMSubmission({
-            client:    msg.sender,
-            modelCID:  _clientModel,
-            evaluated: false,
-            approved:  false
-        }));
-        clientHasSubmitted[_GI][msg.sender] = true;
+        require(!auditingC.clientHasSubmitted[_GI][msg.sender], "Already submitted");
+        auditingC.submitLocalModel(_clientModel, _GI, msg.sender);        
     }
 
-    function _clearclientHasSubmitted(uint _GI) internal {
-        // iterate once over the array to know who to delete
-        LMSubmission[] storage list = lmSubmissions[_GI];
-        for (uint i = 0; i < list.length; i++) {
-            delete clientHasSubmitted[_GI][list[i].client];
-        }
-    }
-
-    function getClientModels(uint _GI) public view returns (LMSubmission[] memory) {
-        return lmSubmissions[_GI];
-    }
 
     function getGI() public view returns (uint) {
         return GI;
-    }
-
-    function evaluateLM(
-        uint _GI,
-        address _client,
-        bool _approved            // true = keep, false = drop
-    ) external onlyOwner {
-        require(GIstate == GIstates.LMSclosed, "Not evaluable");
-        require(_GI == GI, "Wrong GI");
-        LMSubmission[] storage list = lmSubmissions[_GI];
-        bool found = false;
-        for (uint i = 0; i < list.length; i++) {
-            if (list[i].client == _client) {
-                require(!list[i].evaluated, "Already evaluated");
-                list[i].evaluated = true;
-                list[i].approved = _approved;
-                found = true;
-                break;
-            }
-        }
-        require(found, "Submission not found");
     }
 
     // When owner has walked through all clients:
