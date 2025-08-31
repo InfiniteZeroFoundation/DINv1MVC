@@ -14,6 +14,7 @@ import DINDAOTab from "./tabs/DINDAOTab";
 import ModelOwnerTab from "./tabs/ModelOwnerTab";
 import ClientsTab from "./tabs/ClientsTab";
 import ValidatorsTab from "./tabs/ValidatorsTab";
+import AuditorsTab from "./tabs/AuditorsTab";
 
 import useGIState from "./hooks/useGIState";
 import { resetAll, distributeDataset } from "./services/global";
@@ -23,7 +24,7 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState("DINDAO");
   const { tooltipVisible, tooltipMsg, tooltipClass, hideTooltip, showTooltip } = useContext(TooltipContext);
-  const { GI, GIstate, GIstatedes, loading, error, fetchGIState } = useGIState(showTooltip, activeTab);
+  const { GI, GIstate, GIstatestr, GIstatedes, loading, error, fetchGIState } = useGIState(showTooltip, activeTab);
 
   const [isResetting, setIsResetting] = useState(false);
   const [isDistributing, setIsDistributing] = useState(false);
@@ -83,17 +84,27 @@ export default function App() {
 
           {activeTab === "Tether Foundation" && <TetherFoundationTab />}
           {activeTab === "DINDAO" && <DINDAOTab GIstate={GIstate} 
-          GI={GI}/>}
+          GI={GI} 
+          GIstatestr={GIstatestr}/>}
 
-          {activeTab === "ModelOwner" && <ModelOwnerTab fetchGIState={fetchGIState} GIstate={GIstate} GIstatedes={GIstatedes}/>}
+          {activeTab === "ModelOwner" && <ModelOwnerTab fetchGIState={fetchGIState} GIstate={GIstate} 
+          GIstatedes={GIstatedes} 
+          GIstatestr={GIstatestr}/>}
 
           {activeTab === "Validators" && <ValidatorsTab 
           GIstate={GIstate} 
-          GI={GI}/>}
+          GI={GI} 
+          GIstatestr={GIstatestr}/>}
+
+          {activeTab === "Auditors" && <AuditorsTab 
+          GIstate={GIstate} 
+          GI={GI} 
+          GIstatestr={GIstatestr}/>}
 
           {activeTab === "Clients" && <ClientsTab 
           GIstate={GIstate} 
-          GI={GI}/>}
+          GI={GI} 
+          GIstatestr={GIstatestr}/>}
 
         </div>
       </main>

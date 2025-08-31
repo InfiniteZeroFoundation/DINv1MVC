@@ -4,7 +4,7 @@ from dotenv import load_dotenv, set_key, unset_key, dotenv_values
 import time
 
 from services.blockchain_services import get_w3
-from services.model_architect import get_DINTaskCoordinator_Instance
+from services.model_architect import get_DINTaskCoordinator_Instance, GIstatestrToIndex, GIstateToStr
 from services.DAO_services import get_DINtokenContract_Instance, get_DINValidatorStake_Instance, get_DINCoordinator_Instance
 
 from services.ipfs_service import generate_fake_cid_v0
@@ -126,7 +126,6 @@ def get_validators_state():
             if DinValidatorStake_Contract_Address is not None:
                 deployed_DINValidatorStakeContract = get_DINValidatorStake_Instance(dinvalidatorstake_address=DinValidatorStake_Contract_Address)
                 validator_din_staked_tokens = deployed_DINValidatorStakeContract.functions.getStake(validator_address).call()
-                print(validator_address, " --- validator_din_staked_tokens: ", validator_din_staked_tokens)
                 ValidatorDinStakedTokens.append(validator_din_staked_tokens)
             else:
                 ValidatorDinStakedTokens.append(0)
@@ -308,7 +307,7 @@ def stake_dintokens_single(request: ValidatorAddressRequest):
             
             receipt = w3.eth.wait_for_transaction_receipt(tx_stake_hash)
       
-        return {"message": "DIN tokens staked successfully",
+            return {"message": "DIN tokens staked successfully",
                 "status": "success"}          
                 
     except Exception as e:
@@ -324,21 +323,22 @@ def register_task_validators():
         
         DINTaskCoordinator_Contract_Address = env_config.get("DINTaskCoordinator_Contract_Address")
         
+        
+        
         deployed_DINTaskCoordinatorContract = get_DINTaskCoordinator_Instance(dintaskcoordinator_address=DINTaskCoordinator_Contract_Address)
         
         DINValidatorStake_Contract_Address = env_config.get("DINValidatorStake_Contract_Address")
         
         deployed_DINValidatorStakeContract = get_DINValidatorStake_Instance(dinvalidatorstake_address=DINValidatorStake_Contract_Address)
         
-        
-        
         Validator_Adresses = w3.eth.accounts[2+9:2+9+12]
         
         curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
         
         curr_GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
+    
         
-        if curr_GIstate != 2:
+        if GIstateToStr(curr_GIstate) != "DINvalidatorRegistrationStarted":
             raise Exception("Can not register validators at this time")
         
         registered_validators = deployed_DINTaskCoordinatorContract.functions.getDINtaskValidators(curr_GI).call()
@@ -366,18 +366,25 @@ def register_task_validators():
 @router.post("/registerTaskValidatorSingle")
 def register_task_validator_single(request: ValidatorAddressRequest):
     try:
+        
         validator_address = request.validator_address
         env_config = dotenv_values(".env")
-        
+        w3 = get_w3()
         DINTaskCoordinator_Contract_Address = env_config.get("DINTaskCoordinator_Contract_Address")
         
         deployed_DINTaskCoordinatorContract = get_DINTaskCoordinator_Instance(dintaskcoordinator_address=DINTaskCoordinator_Contract_Address)
+        
+        DINValidatorStake_Contract_Address = env_config.get("DINValidatorStake_Contract_Address")
+        
+        deployed_DINValidatorStakeContract = get_DINValidatorStake_Instance(dinvalidatorstake_address=DINValidatorStake_Contract_Address)
+        
+        
         
         curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
         
         curr_GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
         
-        if curr_GIstate != 2:
+        if GIstateToStr(curr_GIstate) != "DINvalidatorRegistrationStarted":
             raise Exception("Can not register validators at this time")
         
         registered_validators = deployed_DINTaskCoordinatorContract.functions.getDINtaskValidators(curr_GI).call()

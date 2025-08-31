@@ -6,7 +6,7 @@ router = APIRouter(tags=["Miscellaneous"])
 from services.dataset_service import load_mnist_dataset, save_datasets
 from services.partition_service import partition_dataset, save_partitioned_data
 
-from services.model_architect import get_DINTaskCoordinator_Instance
+from services.model_architect import get_DINTaskCoordinator_Instance, GIstateToDes, GIstateToStr
 
 @router.get("/getGIState")
 def get_GIState():
@@ -18,6 +18,7 @@ def get_GIState():
             return {"message": "DINTaskCoordinator_Contract_Address not found",
                     "status": "error",
                     "GI": 0,
+                    "GIstatestr": "DINTaskCoordinator contract not deployed",
                     "GIstatedes": "DINTaskCoordinator contract not deployed"}
         else:
             
@@ -27,44 +28,21 @@ def get_GIState():
             
             GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
             
-            if GIstate == 0:
-                GIstatedes = "Awaiting Genesis Model"
-            elif GIstate == 1:
-                GIstatedes = "Genesis Model Created"
-            elif GIstate == 2:
-                GIstatedes = "GI started"
-            elif GIstate == 3:
-                GIstatedes = "LM submissions started"
-            elif GIstate == 4:
-                GIstatedes = "LM submissions closed"
-            elif GIstate == 5:
-                GIstatedes = "LM submissions evaluation closed"
-            elif GIstate == 6:
-                GIstatedes = "T1nT2B created"
-            elif GIstate == 7:
-                GIstatedes = "T1B aggregation started"
-            elif GIstate == 8:
-                GIstatedes = "T1B aggregation done"
-            elif GIstate == 9:
-                GIstatedes = "T2B aggregation started"
-            elif GIstate == 10:
-                GIstatedes = "T2B aggregation done"
-            elif GIstate == 11:
-                GIstatedes = "Validators slashed"
-            elif GIstate == 12:
-                GIstatedes = "GI ended"
-            
+            GIstatedes = GIstateToDes(GIstate)
+            GIstatestr = GIstateToStr(GIstate)
             
             return {"message": "GI state fetched successfully",
                     "status": "success",
                     "GI": GI,
                     "GIstate": GIstate,
+                    "GIstatestr": GIstatestr,
                     "GIstatedes": GIstatedes}
     except Exception as e:
         return {"message": str(e),
                 "status": "error",
                 "GI": None,
                 "GIstate": None,
+                "GIstatestr": None,
                 "GIstatedes": None}
 
 
@@ -110,6 +88,9 @@ def resetall():
         unset_key(".env", "DPModeUsed")
         unset_key(".env", "DINTaskCoordinatorISslasher")
         unset_key(".env", "TetherMock_Contract_Address")
+        unset_key(".env", "DINTaskAuditor_Contract_Address")
+        unset_key(".env", "DINTaskAuditorISslasher")
+        
         
         
         
