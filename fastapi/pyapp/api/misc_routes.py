@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from dotenv import load_dotenv, set_key, unset_key, dotenv_values
 router = APIRouter(tags=["Miscellaneous"])
 
-
+import httpx
+from typing import List, Tuple, Optional, Dict, Any
 from services.dataset_service import load_mnist_dataset, save_datasets
 from services.partition_service import partition_dataset, save_partitioned_data
+import time
 
 from services.model_architect import get_DINTaskCoordinator_Instance, GIstateToDes, GIstateToStr
 
@@ -103,3 +105,91 @@ def resetall():
 @router.get("/test")
 def test():
     return {"message": "Router is working!"}
+
+
+
+# Order matters. Add the rest of your steps here.
+ONE_CLICK_STEPS: List[Tuple[str, str, Optional[dict]]] = [
+    ("GET",  "/reset/resetall",                               None),
+    ("POST", "/tetherfoundation/deployTetherMockContract",    None),
+    ("POST", "/dindao/deployDINCoordinator",                  None),
+    ("POST", "/dindao/deployDinValidatorStake",               None),
+    ("POST", "/modelowner/buyUSDT",                           None),
+    ("POST", "/modelowner/deployDINTaskCoordinator",          None),
+    ("POST", "/modelowner/deployDINtaskAuditor",              None),
+    ("POST", "/modelowner/depositRewardInDINtaskAuditor",            None),
+    ("POST", "/dindao/addDINTaskCoordinatorAsSlasher",            None),
+    ("POST", "/modelowner/setDINTaskCoordinatorAsSlasher",            None),
+    ("POST", "/dindao/addDINTaskAuditorAsSlasher",            None),
+    ("POST", "/modelowner/setDINTaskAuditorAsSlasher",            None),
+    ("POST", "/modelowner/createGenesisModel",            None),
+    ("POST", "/modelowner/startGI",            None),
+    ("POST", "/modelowner/startDINvalidatorRegistration",            None),
+    ("POST", "/validators/buyDINTokens",            None),
+    ("POST", "/validators/stakeDINTokens",            None),
+    ("POST", "/validators/registerTaskValidators",            None),
+    ("POST", "/modelowner/closeDINvalidatorRegistration",            None),
+    ("POST", "/modelowner/startDINauditorRegistration",            None),
+    ("POST", "/auditors/buyDINTokens",            None),
+    ("POST", "/auditors/stakeDINTokens",            None),
+    ("POST", "/auditors/registerTaskAuditors",            None),
+    ("POST", "/modelowner/closeDINauditorRegistration",            None),
+    ("POST", "/modelowner/startLMsubmissions",            None),
+    ("POST", "/clients/createClientModels",            {"selectedDPMode": "afterTraining"}),
+    ("POST", "/modelowner/closeLMsubmissions",            None),
+    ("POST", "/modelowner/createAuditorsBatches", None),
+    ("POST", "/modelowner/startLMsubmissionsEvaluation",            None)
+]
+
+
+@router.get("/oneclicksetup")
+async def oneclicksetup(
+    request: Request,
+    stop_on_error: bool = True,
+    timeout_seconds: float = 60.0,
+):
+    """Run a stack of your existing routes in sequence, in-process."""
+    transport = httpx.ASGITransport(app=request.app)
+    results: List[Dict[str, Any]] = []
+
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://app",  # required placeholder
+        timeout=timeout_seconds,
+    ) as client:
+        for method, path, payload in ONE_CLICK_STEPS:
+            try:
+                resp = await client.request(method, path, json=payload)
+                try:
+                    body = resp.json()
+                except Exception:
+                    body = resp.text
+
+                results.append({
+                    "method": method,
+                    "path": path,
+                    "status": resp.status_code,
+                    "ok": resp.is_success,
+                    "response": body,
+                })
+                
+                time.sleep(2)
+
+                if not resp.is_success and stop_on_error:
+                    return {
+                        "ok": False,
+                        "message": "One click setup halted on error.",
+                        "failed_at": path,
+                        "results": results,
+                    }
+            except Exception as e:
+                results.append({"method": method, "path": path, "ok": False, "error": str(e)})
+                if stop_on_error:
+                    return {
+                        "ok": False,
+                        "message": "One click setup halted on exception.",
+                        "failed_at": path,
+                        "results": results,
+                    }
+
+    return {"ok": True, "message": "One click setup completed!", "results": results}

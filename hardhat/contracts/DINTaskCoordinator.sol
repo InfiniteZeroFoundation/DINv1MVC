@@ -11,6 +11,8 @@ interface IDinValidatorStake {
 }
 
 interface IDINTaskAuditor {
+    function createAuditorsBatches(uint _GI) external returns (bool);
+    function setTestDataAssignedFlag(uint _GI, bool flag) external;
 }
     
 
@@ -32,6 +34,7 @@ contract DINTaskCoordinator is Ownable {
         DINauditorRegistrationClosed,
         LMSstarted,
         LMSclosed,
+        AuditorsBatchesCreated,
         LMSevaluationStarted,
         LMSevaluationClosed,
         T1nT2Bcreated,
@@ -160,6 +163,42 @@ contract DINTaskCoordinator is Ownable {
         require(GIstate == GIstates.LMSstarted, "LM submissions are not started");
         require(_GI == GI, "Invalid GlobalIteration");
         GIstate = GIstates.LMSclosed;
+    }
+
+
+    function createAuditorsBatches(uint _GI) public onlyOwner {
+        require(GIstate == GIstates.LMSclosed, "LM submissions evaluation can not be started");
+        require(_GI == GI, "Invalid GlobalIteration");
+
+
+        bool success = dinTaskAuditorContract.createAuditorsBatches(_GI);
+        require(success, "Failed to create auditors batches");
+        
+        GIstate = GIstates.AuditorsBatchesCreated;
+        
+    }
+
+    function setTestDataAssignedFlag ( uint _GI, bool flag ) external onlyOwner {
+        require(_GI == GI, "Wrong GI");
+        require(GIstate == GIstates.AuditorsBatchesCreated, "TC: can not set TestDataAssignedFlag");
+
+        dinTaskAuditorContract.setTestDataAssignedFlag(_GI, flag);
+
+
+    }
+
+
+    function startLMsubmissionsEvaluation(uint _GI) public onlyOwner {
+        require(GIstate == GIstates.AuditorsBatchesCreated, "LM submissions evaluation can not be started");
+        require(_GI == GI, "Invalid GlobalIteration");
+
+        GIstate = GIstates.LMSevaluationStarted;
+    }
+
+    function closeLMsubmissionsEvaluation(uint _GI) public onlyOwner {
+        require(GIstate == GIstates.LMSevaluationStarted, "LM submissions evaluation can not be finished");
+        require(_GI == GI, "Invalid GlobalIteration");
+        GIstate = GIstates.LMSevaluationClosed;
     }
 
 }

@@ -221,7 +221,7 @@ export default function DINDAOTab({GIstate, GI, GIstatestr}) {
               onClick={addDINTaskAuditorAsSlasher}
               style={{ marginTop: "1rem" }}
             >
-              Add DINTaskCoordinator as Slasher 
+              Add DINTaskAuditor as Slasher 
             </button>
           )}
 

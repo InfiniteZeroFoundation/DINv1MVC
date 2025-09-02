@@ -57,11 +57,11 @@ def get_validators_state():
             print("GIstate: ", GIstate)
             
             
-            if curr_GI > 0 and GIstate >= 2:
+            if curr_GI > 0 and GIstate >= 6 : #DINvalidatorRegistrationStarted
                 registered_validators = deployed_DINTaskCoordinatorContract.functions.getDINtaskValidators(curr_GI).call()
                 print("registered_validators: ", registered_validators)
                 
-            if curr_GI > 0 and GIstate >= 7:
+            if curr_GI > 0 and GIstate >= 14: # T1nT2Bcreated
                 t1_batches_count = deployed_DINTaskCoordinatorContract.functions.tier1BatchCount(curr_GI).call()
                 print("t1_batches_count: ", t1_batches_count)
                 
@@ -423,7 +423,7 @@ def aggregateHonestlyT1(request: ValidatorAddressRequest):
         
         curr_GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
         
-        if curr_GIstate != 7:
+        if curr_GIstate != 15: #T1AggregationStarted
             raise Exception("Can not submit aggregated T1 CiD honestly at this time")
         
         registered_validators = deployed_DINTaskCoordinatorContract.functions.getDINtaskValidators(curr_GI).call()
@@ -486,7 +486,7 @@ def aggregateMaliciouslyT1(request: ValidatorAddressRequest):
         
         curr_GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
         
-        if curr_GIstate != 7:
+        if curr_GIstate != 15: #T1AggregationStarted
             raise Exception("Can not submit aggregated T1 CID maliciously at this time")
         
         registered_validators = deployed_DINTaskCoordinatorContract.functions.getDINtaskValidators(curr_GI).call()
@@ -539,7 +539,7 @@ def aggregateHonestlyT2(request: ValidatorAddressRequest):
         
         curr_GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
         
-        if curr_GIstate != 9:
+        if curr_GIstate != 17: #T2AggregationStarted
             raise Exception("Can not submit aggregated T2 CID honestly at this time")
         
         registered_validators = deployed_DINTaskCoordinatorContract.functions.getDINtaskValidators(curr_GI).call()
@@ -607,7 +607,7 @@ def aggregateMaliciouslyT2(request: ValidatorAddressRequest):
         
         curr_GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
         
-        if curr_GIstate != 9:
+        if curr_GIstate != 17: #T2AggregationStarted
             raise Exception("Can not submit aggregated T2 CID maliciously at this time")
         
         registered_validators = deployed_DINTaskCoordinatorContract.functions.getDINtaskValidators(curr_GI).call()

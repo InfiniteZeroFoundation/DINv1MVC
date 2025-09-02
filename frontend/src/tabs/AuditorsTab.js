@@ -182,7 +182,7 @@ export default function AuditorsTab({GIstate, GI, GIstatestr}) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          validator_address: address,
+          auditor_address: address,
         }),
       });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);

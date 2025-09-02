@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from dotenv import load_dotenv, set_key, unset_key, dotenv_values
 
-
+import traceback; 
 from services.blockchain_services import get_w3
+from services.modelowner_services import create_audit_testDataCIDs
 from services.model_architect import getGenesisModelIpfs, get_DINTaskCoordinator_Instance, get_DINTaskAuditor_Instance, GIstatestrToIndex, GIstateToStr
 from services.DAO_services import get_DINCoordinator_Instance, get_DINtokenContract_Instance, get_DINValidatorStake_Instance
 from services.tetherfoundation_services import get_TetherMock_Instance
@@ -12,19 +13,20 @@ from .schemas import Tier1Batch, Tier2Batch
 
 router = APIRouter(prefix="/modelowner", tags=["Model Owner"])
 
+MIN_STAKE = 1000000 
 @router.post("/getModelOwnerState")
 def get_modelowner_state():
-    
     try:
         env_config = dotenv_values(".env")
         w3 = get_w3()
-        model_owner_address = env_config.get("ModelOwner_Address")
         
-        client_models_created_f = env_config.get("ClientModelsCreatedF")
+        model_owner_address = env_config.get("ModelOwner_Address")
         
         if model_owner_address is None:
             model_owner_address = w3.eth.accounts[1] 
             set_key(".env", "ModelOwner_Address", model_owner_address)
+            
+        TetherMock_Contract_Address = env_config.get("TetherMock_Contract_Address")  
         
         DinCoordinator_Contract_Address = env_config.get("DINCoordinator_Contract_Address")
         
@@ -35,108 +37,104 @@ def get_modelowner_state():
         DINTaskAuditor_Contract_Address = env_config.get("DINTaskAuditor_Contract_Address")
         
         IS_GenesisModelCreated = env_config.get("IS_GenesisModelCreated")
+        
         model_hash = env_config.get("GenesisModelIpfsHash")
-        if DINTaskCoordinator_Contract_Address is None:
-            dintaskcoordinator_dintoken_balance = 0
-        else:
-            deployed_DINTokenContract = get_DINtokenContract_Instance(dintoken_address=DINToken_Contract_Address)
-            dintaskcoordinator_dintoken_balance = deployed_DINTokenContract.functions.balanceOf(DINTaskCoordinator_Contract_Address).call()
         
+        client_models_created_f = env_config.get("ClientModelsCreatedF")
         
-        if DINToken_Contract_Address is None:
-            model_owner_dintoken_balance = 0
-            
-        else:
-            deployed_DINtokenContract = get_DINtokenContract_Instance(dintoken_address=DINToken_Contract_Address)
-            model_owner_dintoken_balance = deployed_DINtokenContract.functions.balanceOf(model_owner_address).call()
+        model_owner_dintoken_balance = 0
+        dintaskauditor_dintoken_balance = 0
+        
+        model_owner_usdt_balance = 0
+        dintaskauditor_usdt_balance = 0
         
         registered_validators = []
         registered_auditors = []
+        audiors_batch_test_cids = []
+        TestDataCID_assigned_F = False
             
-        if DINTaskCoordinator_Contract_Address is not None:
+        
+        if DINToken_Contract_Address is not None:
+            deployed_DINTokenContract = get_DINtokenContract_Instance(dintoken_address=DINToken_Contract_Address)
+            model_owner_dintoken_balance = deployed_DINTokenContract.functions.balanceOf(model_owner_address).call()
+            
+            if DINTaskAuditor_Contract_Address is not None:
+                dintaskauditor_dintoken_balance = deployed_DINTokenContract.functions.balanceOf(DINTaskAuditor_Contract_Address).call()
+            
+        if TetherMock_Contract_Address is not None:
+            deployed_TetherMockContract = get_TetherMock_Instance(tethermock_address=TetherMock_Contract_Address)
+            
+            tethermock_contract_decimals = deployed_TetherMockContract.functions.decimals().call()
+            
+            model_owner_usdt_balance = deployed_TetherMockContract.functions.balanceOf(model_owner_address).call() / (10 ** tethermock_contract_decimals)
+            
+            if DINTaskAuditor_Contract_Address is not None:
+                dintaskauditor_usdt_balance = deployed_TetherMockContract.functions.balanceOf(DINTaskAuditor_Contract_Address).call() / (10 ** tethermock_contract_decimals)
+            
+                print("dintaskauditor_usdt_balance", dintaskauditor_usdt_balance)
+        
+        
+        if DINTaskCoordinator_Contract_Address is not None and DINTaskAuditor_Contract_Address is not None:
+            
             deployed_DINTaskCoordinatorContract = get_DINTaskCoordinator_Instance(dintaskcoordinator_address=DINTaskCoordinator_Contract_Address)
+            
+            deployed_DINTaskAuditorContract = get_DINTaskAuditor_Instance(dintaskauditor_address=DINTaskAuditor_Contract_Address)
             
             curr_GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
             
             curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
             
             if curr_GIstate >= GIstatestrToIndex("DINauditorRegistrationStarted"):
-                registered_auditors = deployed_DINTaskCoordinatorContract.functions.getDINtaskAuditors(curr_GI).call()
-        
-       
-        TetherMock_Contract_Address = env_config.get("TetherMock_Contract_Address")    
-        
-        if TetherMock_Contract_Address is None:
-            model_owner_usdt_balance = 0
-            dintaskcoordinator_usdt_balance = 0
-            dintaskauditor_usdt_balance = 0
-            dintaskauditor_dintoken_balance = 0
-        else:
-            deployed_TetherMockContract = get_TetherMock_Instance(tethermock_address=TetherMock_Contract_Address)
-            model_owner_usdt_balance = deployed_TetherMockContract.functions.balanceOf(model_owner_address).call()
-            
-            tethermock_contract_decimals = deployed_TetherMockContract.functions.decimals().call()
-            
-            model_owner_usdt_balance = model_owner_usdt_balance / (10 ** tethermock_contract_decimals)
-            
-            if DINTaskCoordinator_Contract_Address is not None:
-                dintaskcoordinator_usdt_balance = deployed_TetherMockContract.functions.balanceOf(DINTaskCoordinator_Contract_Address).call()
-            else:
-                dintaskcoordinator_usdt_balance = 0
-            
-            dintaskcoordinator_usdt_balance = dintaskcoordinator_usdt_balance / (10 ** tethermock_contract_decimals)
-            
-            if DINTaskAuditor_Contract_Address is not None:
-                dintaskauditor_usdt_balance = deployed_TetherMockContract.functions.balanceOf(DINTaskAuditor_Contract_Address).call()
-                dintaskauditor_dintoken_balance = deployed_DINtokenContract.functions.balanceOf(DINTaskAuditor_Contract_Address).call()
+                registered_auditors = deployed_DINTaskAuditorContract.functions.getDINtaskAuditors(curr_GI).call()
                 
-                if curr_GIstate >= GIstatestrToIndex("DINauditorRegistrationStarted"):
-                    registered_auditors = deployed_DINTaskCoordinatorContract.functions.dinAuditors(curr_GI).call()
-            else:
-                dintaskauditor_usdt_balance = 0
-                dintaskauditor_dintoken_balance = 0
+            if curr_GIstate >= GIstatestrToIndex("DINvalidatorRegistrationStarted"):
+                registered_validators = deployed_DINTaskCoordinatorContract.functions.getDINtaskValidators(curr_GI).call()
                 
-            dintaskauditor_usdt_balance = dintaskauditor_usdt_balance / (10 ** tethermock_contract_decimals)
-        print("dintaskauditor_usdt_balance:", dintaskauditor_usdt_balance)
-        return {
-            "message": "Model owner state fetched successfully",
-            "status": "success",
-            "model_owner_address": model_owner_address,
-            "model_owner_eth_balance": w3.from_wei(w3.eth.get_balance(model_owner_address), 'ether'),
-            "model_owner_dintoken_balance": model_owner_dintoken_balance,
-            "model_owner_usdt_balance": model_owner_usdt_balance,
-            "mock_tether_address": TetherMock_Contract_Address,
-            "dintaskcoordinator_address": DINTaskCoordinator_Contract_Address,
-            "dintaskcoordinator_dintoken_balance": dintaskcoordinator_dintoken_balance,
-            "IS_GenesisModelCreated": IS_GenesisModelCreated,
-            "model_ipfs_hash": model_hash,
-            "registered_validators": registered_validators,
-            "client_models_created_f": client_models_created_f,
-            "dintaskcoordinator_usdt_balance": dintaskcoordinator_usdt_balance,
-            "dintaskauditor_address": DINTaskAuditor_Contract_Address,
-            "dintaskauditor_usdt_balance": dintaskauditor_usdt_balance,
-            "dintaskauditor_dintoken_balance": dintaskauditor_dintoken_balance,
-            "registered_auditors": registered_auditors
-            }
+            TestDataCID_assigned_F = deployed_DINTaskAuditorContract.functions.Is_testdataCIDs_Assigned(curr_GI).call()
             
-    except Exception as e:
-        print("Error fetching model owner state:", e)
-        return {"message": str(e),
-                "status": "error",
-                "model_owner_address": None,
-                "model_owner_eth_balance": None,
-                "model_owner_dintoken_balance": None,
-                "dintaskcoordinator_address": None,
-                "dintaskcoordinator_dintoken_balance": None,
-                "IS_GenesisModelCreated": False,
-                "model_ipfs_hash": None,
-                "registered_validators": None,
-                "client_models_created_f": False,
-                "model_owner_usdt_balance": None,
-                "dintaskcoordinator_usdt_balance": None,
-                "mock_tether_address": None
-                }
+            if curr_GIstate >= GIstatestrToIndex("AuditorsBatchesCreated"):
     
+                audtor_batch_count = deployed_DINTaskAuditorContract.functions.AuditorsBatchCount(curr_GI).call()
+                
+                
+                for i in range(audtor_batch_count):
+                    
+                    batch_id, auditors, model_indexes, test_cid = deployed_DINTaskAuditorContract.functions.getAuditorsBatch(curr_GI, i).call()
+                    if test_cid:
+                        audiors_batch_test_cids.append(test_cid)
+                
+        
+        
+        return {"message": "Model Owner State fetched successfully",
+                "status": "success",
+                "model_owner_address": model_owner_address,
+                "mock_tether_address": TetherMock_Contract_Address,
+                "dintaskcoordinator_address": DINTaskCoordinator_Contract_Address,
+                "dintaskauditor_address": DINTaskAuditor_Contract_Address,
+                
+                "model_owner_eth_balance": w3.from_wei(w3.eth.get_balance(model_owner_address), 'ether'),
+                
+                "model_owner_dintoken_balance": model_owner_dintoken_balance,
+                
+                "model_owner_usdt_balance": model_owner_usdt_balance,
+                "dintaskauditor_usdt_balance": dintaskauditor_usdt_balance,
+                
+                
+                "registered_validators": registered_validators,
+                "registered_auditors": registered_auditors,
+                
+                "IS_GenesisModelCreated": IS_GenesisModelCreated,
+                "model_ipfs_hash": model_hash,
+                
+                "client_models_created_f": client_models_created_f,
+                "TestDataCID_assigned_F": TestDataCID_assigned_F,
+                "audiors_batch_test_cids":audiors_batch_test_cids 
+                
+                }
+    except Exception as e:
+        
+        return {"message": "Error fetching Model Owner State " + str(e),
+                "status": "error"}
 
 @router.post("/buyUSDT")
 def buy_usdt():
@@ -145,7 +143,7 @@ def buy_usdt():
         w3 = get_w3()
         model_owner_address = env_config.get("ModelOwner_Address")
 
-        
+        print("model_owner_address", model_owner_address)
         TetherMock_Contract_Address = env_config.get("TetherMock_Contract_Address")    
         
         if TetherMock_Contract_Address is None:
@@ -641,7 +639,7 @@ def close_LMsubmissions():
         
         GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
         
-        if curr_GI < 1 or GI_state != 3:
+        if curr_GI < 1 or GIstate != GIstatestrToIndex("LMSstarted"):
             raise Exception("Can not close LM submissions at this time")
         tx_hash = deployed_DINTaskCoordinatorContract.functions.closeLMsubmissions(curr_GI).transact({
             "from": model_owner_address,
@@ -675,64 +673,261 @@ def get_modelowner_client_models():
         
         curr_GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
         
-        if curr_GIstate < 4:
+        if curr_GIstate < GIstatestrToIndex("LMSclosed"): 
             raise Exception("Can not get client models at this time")
         
-        lm_submissions = deployed_DINTaskCoordinatorContract.functions.getClientModels(curr_GI).call()
+        DINTaskAuditor_Contract_Address = env_config.get("DINTaskAuditor_Contract_Address")
         
-        print("lm_submissions: ", lm_submissions)
+        deployed_DINTaskAuditorContract = get_DINTaskAuditor_Instance(dintaskauditor_address=DINTaskAuditor_Contract_Address)
+        
+        raw_lm_submissions = deployed_DINTaskAuditorContract.functions.getClientModels(curr_GI).call()
         
         
+        lm_submissions = []
+        
+        if GIstatestrToIndex("LMSclosed") <= curr_GIstate:
+
+            for idx, sub in enumerate(raw_lm_submissions):
+                client, model_cid, submitted_at, eligible, evaluated, approved, final_avg = sub
+                lm_submissions.append({
+                    "index": idx,
+                    "client": client,
+                    "modelCID": model_cid or "None",
+                    "submittedAt": submitted_at,
+                    "eligible": eligible,
+                    "evaluated": evaluated,
+                    "approved": approved,
+                    "finalAvgScore": int(final_avg)
+                })
+            
+        if GIstatestrToIndex("AuditorsBatchesCreated") <= curr_GIstate:    
+            raw_audit_batches = []
+            processed_audit_batches = []
+            model_to_batch = {}
+            audtor_batch_count = deployed_DINTaskAuditorContract.functions.AuditorsBatchCount(curr_GI).call()
+            
+            for batch_id in range(audtor_batch_count):
+                raw_audit_batches.append(deployed_DINTaskAuditorContract.functions.getAuditorsBatch(curr_GI, batch_id).call())
+            
+            for batch in raw_audit_batches:
+                batch_id, auditors, model_indexes, test_cid = batch
+                processed_audit_batches.append({"batch_id": batch_id, "auditors": auditors, "model_indexes": model_indexes, "test_cid": test_cid or "None"})
+            
+                for m_idx in model_indexes:
+                    model_to_batch[m_idx] = {
+                        "batch_id": batch_id,
+                        "test_cid": test_cid or "None"
+                    }
+                    
+            # Enrich submissions with vote data
+            model_audit_data = []
+            
+            for submission in lm_submissions:
+                m_idx = submission["index"]
+                batch_info = model_to_batch.get(m_idx)
+
+                votes = []
+                if batch_info:
+                    batch_id = batch_info["batch_id"]
+                    auditors_in_batch = next(
+                        (b["auditors"] for b in processed_audit_batches if b["batch_id"] == batch_id),
+                        []
+                    )
+
+                    for auditor in auditors_in_batch:
+                        try:
+                            score = contract.functions.auditScores(gi, batch_id, auditor, m_idx).call()
+                            eligible = contract.functions.LMeligibleVote(gi, batch_id, auditor, m_idx).call()
+                            has_voted = contract.functions.hasAuditedLM(gi, batch_id, auditor, m_idx).call()
+                        except:
+                            score, eligible, has_voted = 0, False, False
+
+                        votes.append({
+                            "auditor": auditor,
+                            "auditorShort": f"{auditor[:6]}...{auditor[-4:]}",
+                            "hasVoted": has_voted,
+                            "score": int(score) if has_voted else None,
+                            "eligible": eligible if has_voted else None
+                        })
+
+                model_audit_data.append({
+                    "modelIndex": m_idx,
+                    "batchInfo": batch_info,
+                    "votes": votes
+                })
+                
+                    
+                
+                
+            
         
         return {"message": "LM submissions collected successfully",
                 "status": "success",
-                "lm_submissions": lm_submissions}
+                "lm_submissions": lm_submissions,
+                "model_audit_data":model_audit_data}
     except Exception as e:
         print("Error collecting LM submissions:", e)
         return {"message": str(e),
-                "status": "error"}
+                "status": "error",
+                "lm_submissions":[],
+                "model_audit_data":[]
+                }
         
-MIN_STAKE = 1000000 
-
-class ClientModelRequest(BaseModel):
-    client_address: str
-    approved: bool
-
-@router.post("/approveClientModel")
-def approve_client_model(request: ClientModelRequest):
+@router.post("/createAuditorsBatches")
+def createAuditorsBatches():
     try:
         env_config = dotenv_values(".env")
-        
         w3 = get_w3()
-        
         model_owner_address = env_config.get("ModelOwner_Address")
+        
+        DINTaskAuditor_Contract_Address = env_config.get("DINTaskAuditor_Contract_Address")
+        
+        
+        deployed_DINTaskAuditorContract = get_DINTaskAuditor_Instance(dintaskauditor_address=DINTaskAuditor_Contract_Address)
         
         DINTaskCoordinator_Contract_Address = env_config.get("DINTaskCoordinator_Contract_Address")
         
+
         deployed_DINTaskCoordinatorContract = get_DINTaskCoordinator_Instance(dintaskcoordinator_address=DINTaskCoordinator_Contract_Address)
         
         curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
         
-        curr_GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
+        GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
         
-        if curr_GIstate != 4:
-            raise Exception("Can not approve client model at this time")
+
+                
+        if curr_GI < 0 or GIstate!=GIstatestrToIndex("LMSclosed"):
+            raise Exception("Can not create auditors batches at this time")
         
-        deployed_DINTaskCoordinatorContract.functions.evaluateLM(curr_GI, request.client_address, request.approved).transact({
+        tx_hash = deployed_DINTaskCoordinatorContract.functions.createAuditorsBatches(curr_GI).transact({
             "from": model_owner_address,
             "gas": 3000000,
             "gasPrice": w3.to_wei("5", "gwei"),
         })
-        
-        return {"message": "Client model approved successfully",
-                "status": "success"}
-    except Exception as e:
-        print("Error approving client model:", e)
-        return {"message": str(e),
-                "status": "error"}
+        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
     
-@router.post("/rejectClientModel")
-def reject_client_model(request: ClientModelRequest):
+        
+        return {"message": "Auditors batches created successfully",
+                "status": "success"}
+    except Exception as e:
+        print("Error creating auditors batches:", e)
+        return {"message": str(e),
+                "status": "error"}
+        
+    
+@router.post("/createTestSubDatasetsForAuditorsBatches")
+def createTestSubDatasetsForAuditorsBatches():
+    try:
+       
+        
+        env_config = dotenv_values(".env")
+        w3 = get_w3()
+        
+        model_owner_address = env_config.get("ModelOwner_Address")
+        
+        DINTaskCoordinator_Contract_Address = env_config.get("DINTaskCoordinator_Contract_Address")
+        
+        deployed_DINTaskCoordinatorContract = get_DINTaskCoordinator_Instance(dintaskcoordinator_address=DINTaskCoordinator_Contract_Address)
+        
+        curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
+        
+        GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
+        
+        if curr_GI < 1 or GIstate!=GIstatestrToIndex("AuditorsBatchesCreated"):
+            raise Exception("Can not create test sub datasets for auditors batches at this time")
+        
+        DINTaskAuditor_Contract_Address = env_config.get("DINTaskAuditor_Contract_Address")
+        
+        deployed_DINTaskAuditorContract = get_DINTaskAuditor_Instance(dintaskauditor_address=DINTaskAuditor_Contract_Address)
+        
+        audtor_batch_count = deployed_DINTaskAuditorContract.functions.AuditorsBatchCount(curr_GI).call()
+        
+        #*****----------- fixed for demo --------------***************
+        
+        #audit_testDataCIDs = create_audit_testDataCIDs(audtor_batch_count, curr_GI)
+        
+        audit_testDataCIDs = ['QmYHc4Y6pmMKFohYDJXkFCCrLAQBUhwGuD6ebGZUxi34ea', 'QmSvTuP4XmcNnaYAqYkv6ewUKU7v2PCAnnLB9DqE7MTrAg', 'QmSdiTciKYBTxHKntjY3Pko8szD5D1nXVLU2mVWrsZhWdE', 'QmcLCGEz9FDHti6c2PPUqAh8rzGpQSwFAZi4QifcYkQB49', 'QmRZydYdpcHTpSSNy7MsX2K29KuUwEsoRxDkT9NEHqu6CQ', 'QmfBeoeqxb3SecGj4qUWcYYZ5AtCsUPyBn8deUj4RQofxw']
+        
+        
+
+        print("audit_testDataCIDs: ", audit_testDataCIDs[0:audtor_batch_count])
+        
+        #*****----------- fixed for demo --------------***************
+        
+        for batch_id in range(audtor_batch_count):
+            tx_hash = deployed_DINTaskAuditorContract.functions.assignAuditTestDataset(curr_GI, batch_id, audit_testDataCIDs[batch_id]).transact({
+                "from": model_owner_address,
+                "gas": 3000000,
+                "gasPrice": w3.to_wei("5", "gwei"),
+            })
+            receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+        
+        deployed_DINTaskCoordinatorContract.functions.setTestDataAssignedFlag(curr_GI, True).transact({
+            "from": model_owner_address,
+            "gas": 3000000,
+            "gasPrice": w3.to_wei("5", "gwei"),
+        })
+        set_key(".env", "TestDataset_CIDs_Assigned", "True")
+            
+        return {"message": "Test sub datasets created successfully",
+                "status": "success"}
+    except Exception as e:
+        traceback.print_exc();
+        print("Error creating test sub datasets for auditors batches:", e)
+        return {"message": str(e),
+                "status": "error"}
+
+@router.post("/fetchAuditBatches")
+def fetchAuditBatches():
+    try:
+        env_config = dotenv_values(".env")
+        
+        w3 = get_w3()
+        
+        model_owner_address = env_config.get("ModelOwner_Address")
+        
+        DINTaskCoordinator_Contract_Address = env_config.get("DINTaskCoordinator_Contract_Address")
+        
+        deployed_DINTaskCoordinatorContract = get_DINTaskCoordinator_Instance(dintaskcoordinator_address=DINTaskCoordinator_Contract_Address)
+        
+        curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
+        
+        GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
+        
+        
+        if GIstate < GIstatestrToIndex("AuditorsBatchesCreated"):
+            raise Exception("Can not fetch audit batches at this time")
+        
+        DINTaskAuditor_Contract_Address = env_config.get("DINTaskAuditor_Contract_Address")
+        
+        deployed_DINTaskAuditorContract = get_DINTaskAuditor_Instance(dintaskauditor_address=DINTaskAuditor_Contract_Address)
+        
+        audtor_batch_count = deployed_DINTaskAuditorContract.functions.AuditorsBatchCount(curr_GI).call()
+        
+        raw_audit_batches = []
+        
+        processed_audit_batches = []
+        
+        
+        
+        for batch_id in range(audtor_batch_count):
+            raw_audit_batches.append(deployed_DINTaskAuditorContract.functions.getAuditorsBatch(curr_GI, batch_id).call())
+            
+        for batch in raw_audit_batches:
+            batch_id, auditors, model_indexes, test_cid = batch
+            processed_audit_batches.append({"batch_id": batch_id, "auditors": auditors, "model_indexes": model_indexes, "test_cid": test_cid or "None"})
+        
+        return {"message": "Audit batches fetched successfully",
+                "status": "success",
+                "processed_audit_batches": processed_audit_batches}
+    
+    except Exception as e:
+        print("Error fetching audit batches:", e)
+        return {"message": str(e),
+                "status": "error"}
+       
+@router.post("/startLMsubmissionsEvaluation")
+def startLMsubmissionsEvaluation():
     try:
         env_config = dotenv_values(".env")
         
@@ -748,21 +943,23 @@ def reject_client_model(request: ClientModelRequest):
         
         curr_GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
         
-        if curr_GIstate != 4:
-            raise Exception("Can not reject client model at this time")
+        if curr_GIstate != GIstatestrToIndex("AuditorsBatchesCreated"):
+            raise Exception("Can not start LM submissions evaluation at this time")
         
-        deployed_DINTaskCoordinatorContract.functions.evaluateLM(curr_GI, request.client_address, False).transact({
+        deployed_DINTaskCoordinatorContract.functions.startLMsubmissionsEvaluation(curr_GI).transact({
             "from": model_owner_address,
             "gas": 3000000,
             "gasPrice": w3.to_wei("5", "gwei"),
         })
         
-        return {"message": "Client model rejected successfully",
+        return {"message": "LM submissions evaluation started successfully",
                 "status": "success"}
+        
     except Exception as e:
-        print("Error rejecting client model:", e)
+        print("Error starting LM submissions evaluation:", e)
         return {"message": str(e),
                 "status": "error"}
+        
     
 @router.post("/closeLMsubmissionsEvaluation")
 def closeLMsubmissionsEvaluation():
@@ -781,7 +978,7 @@ def closeLMsubmissionsEvaluation():
         
         curr_GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
         
-        if curr_GIstate != 4:
+        if curr_GIstate != GIstatestrToIndex("LMSevaluationStarted"):
             raise Exception("Can not close LM submissions evaluation at this time")
         
         deployed_DINTaskCoordinatorContract.functions.finalizeEvaluation(curr_GI).transact({

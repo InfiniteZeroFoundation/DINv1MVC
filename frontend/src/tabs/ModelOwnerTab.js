@@ -1,7 +1,9 @@
 
 import React, { useState, useEffect, useContext } from "react";
 import { TooltipContext } from "../context/TooltipContext";
-
+import AuditBatchMO from "../components/AuditBatchMO"
+import ModelList from "../components/ModelList"
+import ModelAuditTable from "../components/ModelAuditTable"
 
 
 /** ======================= ModelOwner TAB ======================= */
@@ -81,8 +83,10 @@ export default function ModelOwnerTab({ fetchGIState, GIstate, GIstatedes, GIsta
   const [clientModelsCreatedF, setClientModelsCreatedF] = useState(false);
   const [lmSubmissions, setLMSubmissions] = useState([]);
   const [registeredTaskAuditors, setRegisteredTaskAuditors] = useState([]);
-
-  
+  const [audiorsBatchTestCIDs, setAudiorsBatchTestCIDs] = useState([]);
+  const [TestDataCID_assigned_F, setTestDataCID_assigned_F] = useState(false);
+  const [AuditBatches, setAuditBatches] = useState([]);
+  const [ModelAuditData, setModelAuditData ] = useState([]);
 
   const fetchModelOwnerState = async () => {
     try {
@@ -111,6 +115,8 @@ export default function ModelOwnerTab({ fetchGIState, GIstate, GIstatedes, GIsta
       setDintaskauditorAddress(data.dintaskauditor_address);
       setDintaskauditorUSDTBalance(data.dintaskauditor_usdt_balance);
       setDintaskauditorDintokenBalance(data.dintaskauditor_dintoken_balance);
+      setAudiorsBatchTestCIDs(data.audiors_batch_test_cids);
+      setTestDataCID_assigned_F(data.TestDataCID_assigned_F);
     } catch (err) {
       console.error("Error fetching model owner state:", err);
       showTooltip(err.message, true);
@@ -222,7 +228,7 @@ export default function ModelOwnerTab({ fetchGIState, GIstate, GIstatedes, GIsta
       setModelOwnerEthBalance(data.model_owner_eth_balance);
       setModelOwnerUSDTBalance(data.model_owner_usdt_balance);
     } catch (err) {
-      console.error("Error depositing and minting DIN tokens:", err);
+      console.error("Error buying usdt:", err);
       showTooltip(err.message, true);
     } finally {
       setLoading(false);
@@ -393,12 +399,6 @@ export default function ModelOwnerTab({ fetchGIState, GIstate, GIstatedes, GIsta
       setLoading(false);
     }
   }
-  
-  useEffect(() => {
-    fetchModelOwnerState();
-    }
-  , []);
-
 
   const fetchClientModels = async () => {
     try {
@@ -411,6 +411,7 @@ export default function ModelOwnerTab({ fetchGIState, GIstate, GIstatedes, GIsta
       const data = await response.json();
       console.log(data);
       setLMSubmissions(data.lm_submissions);
+      setModelAuditData(data.model_audit_data);
     } catch (err) {
       console.error("Error fetching client models:", err);
       showTooltip(err.message, true);
@@ -418,64 +419,89 @@ export default function ModelOwnerTab({ fetchGIState, GIstate, GIstatedes, GIsta
       setLoading(false);
     }
   }
+  
+  useEffect(() => {
+    fetchModelOwnerState();
+    }
+  , []);
 
-  const approveClientModel = async (clientAddress) => {
+  useEffect(() => {
+    if (clientModelsCreatedF && GIstate >= 11){ //LMSclosed
+      fetchClientModels();
+    }
+  }, [clientModelsCreatedF]);
+
+
+  const createAuditorsBatches = async () => {
     try {
       setLoading(true);
-      const response = await fetch("http://localhost:8000/modelowner/approveClientModel", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          client_address: clientAddress,
-          approved: true,
-        }),
-      });
+      const response = await fetch("http://localhost:8000/modelowner/createAuditorsBatches", { method: "POST" });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
       const data = await response.json();
       console.log(data);
-      fetchClientModels();
+      fetchGIState();
     } catch (err) {
-      console.error("Error approving client model:", err);
-      showTooltip(err.message, true);
+      console.error("Error creating auditors batches:", err);
     } finally {
       setLoading(false);
     }
   }
 
-  const rejectClientModel = async (clientAddress) => {
+  const fetchAuditBatches = async () => {
     try {
-      setLoading(true);
-      const response = await fetch("http://localhost:8000/modelowner/rejectClientModel", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          client_address: clientAddress,
-          approved: false,
-        }),
-      });
+      setLoading(true); 
+      const response = await fetch("http://localhost:8000/modelowner/fetchAuditBatches", { method: "POST" });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
       const data = await response.json();
       console.log(data);
-      fetchClientModels();
+      setAuditBatches(data.processed_audit_batches);
     } catch (err) {
-      console.error("Error rejecting client model:", err);
-      showTooltip(err.message, true);
+      console.error("Error fetching audit batches:", err);
     } finally {
-      setLoading(false);
+      setLoading(false);  
     }
   }
 
   useEffect(() => {
-    if (clientModelsCreatedF && GIstate >= 4){
-      fetchClientModels();
+    if (GIstate >= 12) {
+      fetchAuditBatches();
     }
-  }, [clientModelsCreatedF]);
+  }, [TestDataCID_assigned_F, GIstate]);
+
+  const createTestSubDatasetsForAuditorsBatches = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch("http://localhost:8000/modelowner/createTestSubDatasetsForAuditorsBatches", { method: "POST" });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+      const data = await response.json();
+      console.log(data);
+      fetchGIState();
+    } catch (err) {
+      console.error("Error creating test sub datasets for auditors batches:", err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const startLMsubmissionsEvaluation = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch("http://localhost:8000/modelowner/startLMsubmissionsEvaluation", { method: "POST" });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+      const data = await response.json();
+      console.log(data);
+      fetchGIState();
+    } catch (err) {
+      console.error("Error starting LM submissions evaluation:", err);
+      showTooltip(err.message, true);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const closeLMsubmissionsEvaluation = async () => {
     try {
@@ -549,7 +575,7 @@ export default function ModelOwnerTab({ fetchGIState, GIstate, GIstatedes, GIsta
 
 
   useEffect(() => {
-    if (GIstate >= 6) {
+    if (GIstate >= 15) {
       fetchTier1n2Batches();
     }
   }, []);
@@ -829,17 +855,23 @@ export default function ModelOwnerTab({ fetchGIState, GIstate, GIstatedes, GIsta
                   </>
                 ):(null)}
 
-                {GIstatestr === "DINvalidatorRegistrationStarted" && registeredTaskValidators.length >=12? (
-                  <>
-                  <div style={{ marginTop: "1rem", marginBottom: "1rem", display: "flex", justifyContent: "center" }}>
-                  <button className="button button--primary" onClick={closeDINvalidatorRegistration}>
-                  Close DIN Validators Registration
-                  </button>
-                </div>
-                  </>
-                ):(<>
-                  <p>Not enough validators registered - need atleast 12 for demo</p>
-                  </>)}
+                {GIstatestr === "DINvalidatorRegistrationStarted" ? (
+                  registeredTaskValidators.length >= 12 ? (
+                    <div style={{ marginTop: "1rem", marginBottom: "1rem", display: "flex", justifyContent: "center" }}>
+                      <button className="button button--primary" onClick={closeDINvalidatorRegistration}>
+                        Close DIN Validators Registration
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                    <p>Not enough validators registered - need at least 12 for demo</p>
+                    <p>{registeredTaskValidators.length} Validators registered</p>
+                    </>
+                  )
+                ) : GIstate >= 7 ? (
+                  // Assuming GIstate >= 7 means registration is closed or in a later stage // DINvalidatorRegistrationClosed
+                  <p>{registeredTaskValidators.length} Validators registered</p>
+                ) : null}
 
                 
                 {GIstatestr === "DINvalidatorRegistrationClosed" ? (
@@ -852,17 +884,24 @@ export default function ModelOwnerTab({ fetchGIState, GIstate, GIstatedes, GIsta
                   </>
                 ):(null)}
 
-                {GIstatestr === "DINauditorRegistrationStarted" && registeredTaskAuditors.length >=9? (
+                {GIstatestr === "DINauditorRegistrationStarted" ? (
+                  registeredTaskAuditors.length >=9 ? (
                   <>
-                  <div style={{ marginTop: "1rem", marginBottom: "1rem", display: "flex", justifyContent: "center" }}>
-                  <button className="button button--primary" onClick={closeDINauditorRegistration}>
-                  Close DIN Auditors Registration
-                  </button>
-                </div>
-                  </>
-                ):(<>
-                  <p>Not enough auditors registered - need atleast 9 for demo</p>
-                  </>)}
+                    <div style={{ marginTop: "1rem", marginBottom: "1rem", display: "flex", justifyContent: "center" }}>
+                    <button className="button button--primary" onClick={closeDINauditorRegistration}>
+                      Close DIN Auditors Registration
+                      </button>
+                    </div>
+                    </>
+                  ):(<>
+                    <p>Not enough auditors registered - need atleast 9 for demo</p>
+                    <p>{registeredTaskAuditors.length} Validators registered</p>
+                    </>
+                  )
+                ): GIstate >= 9 ? (
+                  // Assuming GIstate >= 9 means registration is closed or in a later stage // DINauditorRegistrationClosed
+                  <p>{registeredTaskAuditors.length} Auditors registered</p>
+                ) : null}
               
 
                 {GIstatestr === "DINauditorRegistrationClosed" && registeredTaskValidators.length >=12 && registeredTaskAuditors.length >=9? (
@@ -876,7 +915,7 @@ export default function ModelOwnerTab({ fetchGIState, GIstate, GIstatedes, GIsta
                 ):(null
                 )}
 
-                { GIstatedes === "LM submissions started" && clientModelsCreatedF ? (
+                { GIstatestr === "LMSstarted" && clientModelsCreatedF ? (
                   <>
                   <div style={{ marginTop: "1rem", marginBottom: "1rem", display: "flex", justifyContent: "center" }}>
                   <button className="button button--primary" onClick={closeLMsubmissions}>
@@ -886,73 +925,50 @@ export default function ModelOwnerTab({ fetchGIState, GIstate, GIstatedes, GIsta
                   </>
                 ):null}
 
-                { (GIstate > 3) && clientModelsCreatedF ? (
-                  <div className="client-models-section">
-                    <h3>Client Models</h3>
-
-                    {lmSubmissions.map((submission, index) => (
-                      <div 
-                        key={index} 
-                        className="client-model-card"
-                        style={{
-                          marginTop: "1.5rem",
-                          marginBottom: "1.5rem",
-                          padding: "1rem",
-                          border: "1px solid #ccc",
-                          borderRadius: "8px",
-                          maxWidth: "600px",
-                          marginInline: "auto",
-                          boxShadow: "0 2px 6px rgba(0,0,0,0.1)"
-                        }}
-                      >
-                        <p>
-                          <strong>Client:</strong> {submission[0]} <br />
-                          <strong>Model CID:</strong> {submission[1]}
-                        </p>
-
-                        {!submission[2] ? (
-                          <div style={{ display: "flex", gap: "1rem", justifyContent: "center" }}>
-                            <button
-                              className="button button--primary"
-                              onClick={() => approveClientModel(submission[0])}
-                              style={{
-                                backgroundColor: "#10B981",
-                                color: "white",
-                                fontWeight: "bold",
-                                padding: "0.5rem 1rem",
-                                borderRadius: "4px",
-                                border: "none",
-                                cursor: "pointer"
-                              }}
-                            >
-                              Approve Client Model
-                            </button>
-
-                            <button
-                              className="button button--danger"
-                              onClick={() => rejectClientModel(submission[0])}
-                              style={{
-                                backgroundColor: "#EF4444",
-                                color: "white",
-                                fontWeight: "bold",
-                                padding: "0.5rem 1rem",
-                                borderRadius: "4px",
-                                border: "none",
-                                cursor: "pointer"
-                              }}
-                            >
-                              Reject Client Model
-                            </button>
-                          </div>
-                        ) : (
-                          <h4 style={{ textAlign: "center", margin: 0, color: submission[3] ? "green" : "red" }}>
-                            {submission[3] ? "✅ Approved" : "❌ Rejected"}
-                          </h4>
-                        )}
-                      </div>
-                    ))}
+                {GIstatestr === "LMSclosed" && (
+                  <div style={{ marginTop: "1rem", marginBottom: "1rem", display: "flex", justifyContent: "center" }}>
+                    <button className="button button--primary" onClick={createAuditorsBatches}>
+                    Create Auditors Batches
+                    </button>
                   </div>
+                )}
+
+                {
+                  GIstatestr === "AuditorsBatchesCreated" && !TestDataCID_assigned_F && (
+                    <div style={{ marginTop: "1rem", marginBottom: "1rem", display: "flex", justifyContent: "center" }}>
+                      <button className="button button--primary" onClick={createTestSubDatasetsForAuditorsBatches}>
+                      Create Test Sub Datasets for Auditors Batches
+                      </button>
+                    </div>
+                  )
+                }
+
+                {GIstatestr === "AuditorsBatchesCreated"  && TestDataCID_assigned_F && (
+                  <div style={{ marginTop: "1rem", marginBottom: "1rem", display: "flex", justifyContent: "center" }}>
+                    <button className="button button--primary" onClick={startLMsubmissionsEvaluation}>
+                    Start LM submissions Evaluation
+                    </button>
+                  </div>
+                )}
+
+                { (GIstate >= 11 && GIstate < 13) && clientModelsCreatedF ? ( //LMSclosed
+                 <ModelList lm_submissions={lmSubmissions} />
                 ) : null}
+
+                { (GIstate >= 12) && clientModelsCreatedF ? ( //AuditorsBatchesCreated
+                 <ModelAuditTable 
+                 submissions={lmSubmissions} 
+                 modelAuditData={ModelAuditData} 
+               />
+                ) : null}
+
+
+                { GIstate >=12 && ( //AuditorsBatchesCreated
+
+                    <AuditBatchMO AuditBatches={AuditBatches}/> 
+                )}
+
+                
 
                 {GIstatedes === "LM submissions closed" && allLmEvaluated && (
                   <div
