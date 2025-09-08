@@ -6,6 +6,7 @@ from services.DAO_services import get_DINtokenContract_Instance, get_DINValidato
 from services.blockchain_services import get_w3
 from services.model_architect import get_DINTaskCoordinator_Instance, GIstatestrToIndex, GIstateToStr, get_DINTaskAuditor_Instance
 
+
 router = APIRouter(prefix="/auditors", tags=["Auditors"])
 
 MIN_STAKE = 1000000 
@@ -450,8 +451,24 @@ def evaluate_lm(request: EvaluateLMRequest):
         if curr_GIstate < GIstatestrToIndex("LMSevaluationStarted"):
             raise Exception("Can not evaluate LM at this time")
         
-        deployed_DINTaskAuditorContract.functions.setAuditScorenEligibility(curr_GI, request.batch_id, request.model_index, 60, True).transact({'from': request.auditor_address,  "gas": int(3000000),
-            "gasPrice": w3.to_wei("5", "gwei"),})
+        # ******************* working **********************************
+        
+        audit_batch = deployed_DINTaskAuditorContract.functions.getAuditorsBatch(curr_GI, request.batch_id).call()
+        
+        testDataCID = audit_batch[3]
+        
+        if request.auditor_address not in audit_batch[1]:
+            raise Exception("Auditor is not assigned to this batch")
+        if request.model_index not in audit_batch[2]:
+            raise Exception("Model is not assigned to this batch")
+        
+        
+        lm = deployed_DINTaskAuditorContract.functions.lmSubmissions(curr_GI, request.model_index).call()
+        
+        print("lm",lm)
+        
+        # deployed_DINTaskAuditorContract.functions.setAuditScorenEligibility(curr_GI, request.batch_id, request.model_index, 60, True).transact({'from': request.auditor_address,  "gas": int(3000000),
+            # "gasPrice": w3.to_wei("5", "gwei"),})
         
         return {"message": "LM evaluated successfully", "status": "success"}
     except Exception as e:

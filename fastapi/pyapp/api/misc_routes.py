@@ -92,6 +92,7 @@ def resetall():
         unset_key(".env", "TetherMock_Contract_Address")
         unset_key(".env", "DINTaskAuditor_Contract_Address")
         unset_key(".env", "DINTaskAuditorISslasher")
+        unset_key(".env", "TestDataset_CIDs_Assigned")
         
         
         
