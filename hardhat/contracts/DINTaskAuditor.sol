@@ -2,6 +2,10 @@
 pragma solidity ^0.8.28;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+
 
 
 
@@ -31,11 +35,6 @@ enum GIstates {
     GIended // 22
 }
 
-interface IMockUSDT {
-
-    function transferFrom(address from, address to, uint256 value) external returns (bool);
-    
-}
 
 interface IDinValidatorStake {
     function getStake(address validator) external view returns (uint256);
@@ -50,8 +49,8 @@ interface IDINTaskCoordinator {
 
 contract DINTaskAuditor is Ownable {
 
-
-    IMockUSDT public mockusdt;
+    using SafeERC20 for IERC20;
+    IERC20 public mockusdt;
 
     IDinValidatorStake public dinvalidatorStakeContract;
 
@@ -207,7 +206,7 @@ contract DINTaskAuditor is Ownable {
 
 
     constructor(address _mockusdt, address _dinvalidatorStakeContract_address, address _dintaskcoordinator_contract_address) Ownable(msg.sender) {
-        mockusdt = IMockUSDT(_mockusdt);
+        mockusdt = IERC20(_mockusdt);
         dinvalidatorStakeContract = IDinValidatorStake(_dinvalidatorStakeContract_address);
         dintaskcoordinatorContract = IDINTaskCoordinator(_dintaskcoordinator_contract_address);
 
@@ -219,9 +218,7 @@ contract DINTaskAuditor is Ownable {
     function depositReward(uint _amount) public onlyOwner {
         require(_amount > 0, "Amount must be greater than 0");
 
-        // Pull MockUSDT from sender (ModelOwner)
-        bool success = mockusdt.transferFrom(msg.sender, address(this), _amount);
-        require(success, "MockUSDT transfer failed");
+        mockusdt.safeTransferFrom(msg.sender, address(this), _amount);
 
         totalDepositedRewards += _amount;
         emit RewardDeposited(msg.sender, _amount);
@@ -277,6 +274,7 @@ contract DINTaskAuditor is Ownable {
     function getClientModels(uint _GI) public view returns (LMSubmission[] memory) {
         return lmSubmissions[_GI];
     }
+
 
     modifier onlyTaskCoordinator(){
         require(msg.sender == address(dintaskcoordinatorContract), "DINTaskAuditor: Not task coordinator");

@@ -3,6 +3,52 @@ import "@nomicfoundation/hardhat-toolbox";
 import * as dotenv from "dotenv";
 import * as fs from "fs";
 
+import * as path from "path";
+import { task } from "hardhat/config";
+import { HardhatRuntimeEnvironment } from "hardhat/types";
+
+
+// ✅ Import from ethers v6
+import { Wallet, HDNodeWallet  } from "ethers";
+
+interface DevAccount {
+  address: string;
+  private_key: string;
+}
+
+task("export-accounts", "Exports Hardhat default accounts")
+  .addParam("output", "Output JSON file path", "./accounts.json")
+  .setAction(async ({ output }: { output: string }, hre: HardhatRuntimeEnvironment) => {
+    const accounts: DevAccount[] = [];
+    const count = 70;
+    const MNEMONIC = "test test test test test test test test test test test junk";
+
+    // You no longer need a 'baseNode' variable defined outside the loop if using Option B
+
+    for (let i = 0; i < count; i++) {
+      // Define the FULL absolute path for the specific child account
+      const pathStr = `m/44'/60'/0'/0/${i}`;
+      
+      // ✅ Use HDNodeWallet.fromPhrase with the full path in the third argument
+      // This function internally handles generating the root node and then deriving the absolute path
+      const wallet = HDNodeWallet.fromPhrase(MNEMONIC, undefined, pathStr);
+
+      accounts.push({
+        address: wallet.address,
+        private_key: wallet.privateKey,
+      });
+      console.log(`Account #${i}: ${wallet.address} using path: ${pathStr}`);
+    }
+
+
+    const data = { hardhat: accounts };
+    const outputPath = path.resolve(output);
+    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+    fs.writeFileSync(outputPath, JSON.stringify(data, null, 2));
+
+    console.log(`\n✅ Saved ${count} accounts to: ${outputPath}`);
+  });
+
 // Load base .env
 dotenv.config({ path: "../.env" });
 

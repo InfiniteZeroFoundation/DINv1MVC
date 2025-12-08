@@ -1,4 +1,388 @@
-# DIN v1 MVC Project Setup
+# DIN P2 Project Setup
+lsof -ti:8545 | xargs kill -9
+
+ipfs daemon
+
+1. **Navigate to the project directory:**
+   ```bash
+   cd /home/azureuser/projects/DINv1MVC
+   ```
+
+2. **Start the Hardhat Node:**
+   - **Directory:** `./hardhat`
+   - **Start Command:**
+     ```bash
+     cd ./hardhat
+     npx hardhat node
+     npx hardhat compile
+     ```
+
+3. running the dincli
+source /home/azureuser/projects/pyDIN/.pyDIN/bin/activate
+python -m dincli.main --help
+python -m dincli.main system configure-network --network local
+
+
+## bash_GI < 0
+python -m dincli.main system reset-all --force
+python -m dincli.main system configure-network --network local
+python -m dincli.main system configure-demo --mode yes
+
+python -m dincli.main system dataset distribute-mnist --clients 9
+
+
+python -m dincli.main system connect-wallet --account 0
+python -m dincli.main dindao deploy din-coordinator --network local --artifact "/home/azureuser/projects/DINv1MVC/hardhat/artifacts/contracts/DinCoordinator.sol/DinCoordinator.json"
+
+python -m dincli.main system dump-abi --artifact "/home/azureuser/projects/DINv1MVC/hardhat/artifacts/contracts/DinCoordinator.sol/DinCoordinator.json"
+
+python -m dincli.main system dump-abi --artifact "/home/azureuser/projects/DINv1MVC/hardhat/artifacts/contracts/DinToken.sol/DinToken.json"
+
+python -m dincli.main dindao deploy din-validator-stake --network local --artifact "/home/azureuser/projects/DINv1MVC/hardhat/artifacts/contracts/DinValidatorStake.sol/DinValidatorStake.json"
+
+python -m dincli.main system dump-abi --artifact "/home/azureuser/projects/DINv1MVC/hardhat/artifacts/contracts/DinValidatorStake.sol/DinValidatorStake.json"
+
+python -m dincli.main system connect-wallet --account 1
+python -m dincli.main system --eth-balance --usdt-balance 
+
+python -m dincli.main system buy-usdt 3000 --network local
+
+
+python -m dincli.main model-owner deploy task-coordinator --network local --artifact "/home/azureuser/projects/DINv1MVC/hardhat/artifacts/contracts/DINTaskCoordinator.sol/DINTaskCoordinator.json"
+
+python -m dincli.main system dump-abi --artifact "/home/azureuser/projects/DINv1MVC/hardhat/artifacts/contracts/DINTaskCoordinator.sol/DINTaskCoordinator.json"
+
+python -m dincli.main model-owner deploy task-auditor --network local --artifact "/home/azureuser/projects/DINv1MVC/hardhat/artifacts/contracts/DINTaskAuditor.sol/DINTaskAuditor.json"
+
+python -m dincli.main system dump-abi --artifact "/home/azureuser/projects/DINv1MVC/hardhat/artifacts/contracts/DINTaskAuditor.sol/DINTaskAuditor.json"
+
+
+
+python -m dincli.main model-owner deposit-reward-in-dintask-auditor --network local --amount 1000 
+
+python -m dincli.main system connect-wallet --account 0
+
+python -m dincli.main dindao add-slasher --taskCoordinator --network local
+
+python -m dincli.main system connect-wallet --account 1
+
+python -m dincli.main model-owner add-slasher --taskCoordinator --network local 
+
+python -m dincli.main system connect-wallet --account 0
+
+python -m dincli.main dindao add-slasher --taskAuditor --network local
+
+
+python -m dincli.main system connect-wallet --account 1
+
+python -m dincli.main model-owner add-slasher --taskAuditor --network local 
+
+python -m dincli.main model-owner model create-genesis --network local 
+
+python -m dincli.main model-owner model submit-genesis --network local 
+
+
+
+## bash_GI > 0
+
+  --taskCoordinator <taskCoordinatorAddress> 
+  --network <net> -->
+
+
+python -m dincli.main system connect-wallet --account 1
+
+python -m dincli.main model-owner gi start --network local
+
+python -m dincli.main system connect-wallet --account 1
+python -m dincli.main model-owner gi reg aggregators-open --network local
+
+python -m dincli.main system connect-wallet --account 11
+python -m dincli.main aggregator dintoken buy 1 --network local
+
+python -m dincli.main system connect-wallet --account 12
+python -m dincli.main aggregator dintoken buy 1 --network local
+
+python -m dincli.main system connect-wallet --account 13
+python -m dincli.main aggregator dintoken buy 1 --network local
+
+python -m dincli.main system connect-wallet --account 14
+python -m dincli.main aggregator dintoken buy 1 --network local
+
+python -m dincli.main system connect-wallet --account 15
+python -m dincli.main aggregator dintoken buy 1 --network local
+
+python -m dincli.main system connect-wallet --account 16
+python -m dincli.main aggregator dintoken buy 1 --network local
+
+python -m dincli.main system connect-wallet --account 17
+python -m dincli.main aggregator dintoken buy 1 --network local
+
+python -m dincli.main system connect-wallet --account 18
+python -m dincli.main aggregator dintoken buy 1 --network local
+
+python -m dincli.main system connect-wallet --account 19
+python -m dincli.main aggregator dintoken buy 1 --network local
+
+python -m dincli.main system connect-wallet --account 20
+python -m dincli.main aggregator dintoken buy 1 --network local
+
+python -m dincli.main system connect-wallet --account 21
+python -m dincli.main aggregator dintoken buy 1 --network local
+
+python -m dincli.main system connect-wallet --account 22
+python -m dincli.main aggregator dintoken buy 1 --network local
+
+python -m dincli.main system connect-wallet --account 11
+python -m dincli.main aggregator dintoken stake 1000000 --network local
+
+python -m dincli.main aggregator dintoken read-stake --network local
+
+python -m dincli.main aggregator register --network local
+
+
+python -m dincli.main system connect-wallet --account 12
+python -m dincli.main aggregator dintoken stake 1000000 --network local
+
+python -m dincli.main aggregator dintoken read-stake --network local
+
+python -m dincli.main aggregator register --network local
+
+
+python -m dincli.main system connect-wallet --account 13
+python -m dincli.main aggregator dintoken stake 1000000 --network local
+
+python -m dincli.main aggregator dintoken read-stake --network local
+
+python -m dincli.main aggregator register --network local
+
+
+python -m dincli.main system connect-wallet --account 14
+python -m dincli.main aggregator dintoken stake 1000000 --network local
+
+python -m dincli.main aggregator dintoken read-stake --network local
+
+python -m dincli.main aggregator register --network local
+
+
+python -m dincli.main system connect-wallet --account 15
+python -m dincli.main aggregator dintoken stake 1000000 --network local
+
+python -m dincli.main aggregator dintoken read-stake --network local
+
+python -m dincli.main aggregator register --network local
+
+
+python -m dincli.main system connect-wallet --account 16
+python -m dincli.main aggregator dintoken stake 1000000 --network local
+
+python -m dincli.main aggregator dintoken read-stake --network local
+
+python -m dincli.main aggregator register --network local
+
+
+python -m dincli.main system connect-wallet --account 17
+python -m dincli.main aggregator dintoken stake 1000000 --network local
+
+python -m dincli.main aggregator dintoken read-stake --network local
+
+python -m dincli.main aggregator register --network local
+
+
+python -m dincli.main system connect-wallet --account 18
+python -m dincli.main aggregator dintoken stake 1000000 --network local
+
+python -m dincli.main aggregator dintoken read-stake --network local
+
+python -m dincli.main aggregator register --network local
+
+
+python -m dincli.main system connect-wallet --account 19
+python -m dincli.main aggregator dintoken stake 1000000 --network local
+
+python -m dincli.main aggregator dintoken read-stake --network local
+
+python -m dincli.main aggregator register --network local
+
+
+python -m dincli.main system connect-wallet --account 20
+python -m dincli.main aggregator dintoken stake 1000000 --network local
+
+python -m dincli.main aggregator dintoken read-stake --network local
+
+python -m dincli.main aggregator register --network local
+
+
+python -m dincli.main system connect-wallet --account 21
+python -m dincli.main aggregator dintoken stake 1000000 --network local
+
+python -m dincli.main aggregator dintoken read-stake --network local
+
+python -m dincli.main aggregator register --network local
+
+
+python -m dincli.main system connect-wallet --account 22
+python -m dincli.main aggregator dintoken stake 1000000 --network local
+
+python -m dincli.main aggregator dintoken read-stake --network local
+
+python -m dincli.main aggregator register --network local
+
+
+python -m dincli.main system connect-wallet --account 1
+
+python -m dincli.main model-owner gi show-registered-aggregators --network local
+
+python -m dincli.main model-owner gi reg aggregators-close --network local
+
+python -m dincli.main model-owner gi reg auditors-open --network local
+
+
+
+python -m dincli.main system connect-wallet --account 50
+python -m dincli.main auditor dintoken buy 1 --network local
+python -m dincli.main auditor dintoken stake 1000000 --network local
+python -m dincli.main auditor dintoken read-stake --network local
+python -m dincli.main auditor register --network local
+
+python -m dincli.main system connect-wallet --account 51
+python -m dincli.main auditor dintoken buy 1 --network local
+python -m dincli.main auditor dintoken stake 1000000 --network local
+python -m dincli.main auditor dintoken read-stake --network local
+python -m dincli.main auditor register --network local
+
+python -m dincli.main system connect-wallet --account 52
+python -m dincli.main auditor dintoken buy 1 --network local
+python -m dincli.main auditor dintoken stake 1000000 --network local
+python -m dincli.main auditor dintoken read-stake --network local
+python -m dincli.main auditor register --network local
+
+python -m dincli.main system connect-wallet --account 53
+python -m dincli.main auditor dintoken buy 1 --network local
+python -m dincli.main auditor dintoken stake 1000000 --network local
+python -m dincli.main auditor dintoken read-stake --network local
+python -m dincli.main auditor register --network local
+
+python -m dincli.main system connect-wallet --account 54
+python -m dincli.main auditor dintoken buy 1 --network local
+python -m dincli.main auditor dintoken stake 1000000 --network local
+python -m dincli.main auditor dintoken read-stake --network local
+python -m dincli.main auditor register --network local
+
+python -m dincli.main system connect-wallet --account 55
+python -m dincli.main auditor dintoken buy 1 --network local
+python -m dincli.main auditor dintoken stake 1000000 --network local
+python -m dincli.main auditor dintoken read-stake --network local
+python -m dincli.main auditor register --network local
+
+python -m dincli.main system connect-wallet --account 56
+python -m dincli.main auditor dintoken buy 1 --network local
+python -m dincli.main auditor dintoken stake 1000000 --network local
+python -m dincli.main auditor dintoken read-stake --network local
+python -m dincli.main auditor register --network local
+
+python -m dincli.main system connect-wallet --account 57
+python -m dincli.main auditor dintoken buy 1 --network local
+python -m dincli.main auditor dintoken stake 1000000 --network local
+python -m dincli.main auditor dintoken read-stake --network local
+python -m dincli.main auditor register --network local
+
+python -m dincli.main system connect-wallet --account 58
+python -m dincli.main auditor dintoken buy 1 --network local
+python -m dincli.main auditor dintoken stake 1000000 --network local
+python -m dincli.main auditor dintoken read-stake --network local
+python -m dincli.main auditor register --network local
+
+
+
+python -m dincli.main system connect-wallet --account 1
+
+python -m dincli.main model-owner gi show-registered-auditors --network local
+python -m dincli.main model-owner gi show-registered-aggregators --network local
+
+python -m dincli.main model-owner gi reg auditors-close --network local
+
+python -m dincli.main model-owner lms open --network local
+
+
+
+
+python -m dincli.main system connect-wallet --account 2
+python -m dincli.main client train-lms --network local --submit
+
+
+python -m dincli.main system connect-wallet --account 3
+python -m dincli.main client train-lms --network local --submit
+
+python -m dincli.main system connect-wallet --account 4
+python -m dincli.main client train-lms --network local --submit
+
+python -m dincli.main system connect-wallet --account 5
+python -m dincli.main client train-lms --network local --submit
+
+python -m dincli.main system connect-wallet --account 6
+python -m dincli.main client train-lms --network local --submit
+
+python -m dincli.main system connect-wallet --account 7
+python -m dincli.main client train-lms --network local --submit
+
+python -m dincli.main system connect-wallet --account 8
+python -m dincli.main client train-lms --network local --submit
+
+python -m dincli.main system connect-wallet --account 9
+python -m dincli.main client train-lms --network local --submit
+
+python -m dincli.main system connect-wallet --account 10
+python -m dincli.main client train-lms --network local --submit
+
+python -m dincli.main system connect-wallet --account 1
+python -m dincli.main client lms show-models --network local
+python -m dincli.main model-owner lms show-models --network local
+
+python -m dincli.main model-owner lms close --network local
+
+python -m dincli.main system connect-wallet --account 1
+python -m dincli.main model-owner gi show-state --network local
+
+python -m dincli.main system connect-wallet --account 1
+python -m dincli.main model-owner auditor-batches create --network local
+
+
+python -m dincli.main model-owner auditor-batches create-testdataset --network local --submit
+python -m dincli.main model-owner auditor-batches show --network local
+
+
+python -m dincli.main model-owner lms-evaluation start --network local
+
+python -m dincli.main model-owner lms-evaluation show --network local --auditor
+
+python -m dincli.main auditor lms-evaluation show-batch --network local
+
+python -m dincli.main auditor lms-evaluation evaluate --network local  --lmi 1 --batch 2 --submit
+
+python -m dincli.main model-owner lms-evaluation close --network local
+
+python -m dincli.main model-owner aggregation create-t1nt2-batches --network local 
+
+python -m dincli.main model-owner aggregation show-t1-batches --network local
+python -m dincli.main model-owner aggregation show-t2-batches --network local
+
+
+python -m dincli.main model-owner aggregation T1 start --network local
+python -m dincli.main model-owner aggregation T1 close --network local
+
+python -m dincli.main model-owner aggregation T2 start --network local
+python -m dincli.main model-owner aggregation T2 close --network local
+
+
+
+
+
+
+
+
+
+
+
 This project consists of multiple components. Follow the instructions below to start each service. you can do it following instructions in the dependency section below. Project description is also available in a section below.
 
 ## Project Structure

@@ -37,7 +37,7 @@ contract DinCoordinator {
     function depositAndMint() external payable {
         require(msg.value > 0, "No ETH sent");
 
-        uint256 mintAmount = msg.value * DIN_PER_ETH / 1 ether;
+        uint256 mintAmount = msg.value * DIN_PER_ETH;
         dintoken.mint(msg.sender, mintAmount);
 
         emit DepositAndMint(msg.sender, msg.value, mintAmount);

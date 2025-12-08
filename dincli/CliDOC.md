@@ -1,26 +1,30 @@
 # 🔹 GLOBAL
 
 ```
-dincli --help
-dincli --version
-dincli --network >> <network|local|sepolia|mainnet>
+dincli --help ✅
+dincli --version ✅
+dincli --network >> <network|local|sepolia|mainnet> ✅
 ```
 
 
 # 🔹 SYSTEM UTILITIES
 
 ```
-dincli system connect-wallet <0xprivatekey>
-dincli system reset-all
+dincli system connect-wallet --account <num>
+dincli system connect-wallet <0xprivatekey> ✅
+dincli system read-wallet ✅
+dincli system configure-network --network <net> ✅
+dincli system configure-demo --mode [yes|no] ✅
+dincli system reset-all [--force] ✅
 dincli system reset <DINTaskCoordinatorAddress>
-dincli system --usdt-info
-dincli system din-info --coordinator|--token|--stake|--representative --network <net>
+dincli system --usdt-info ✅
+dincli system din-info --coordinator|--token|--stake|--representative --network <net>  ✅
 ```
 
 
 Datasets:
 ```
-dincli system dataset distribute-mnist --clients <num>
+dincli system dataset distribute-mnist --clients <num> ✅
 ```
 
 
@@ -31,16 +35,17 @@ Everything here uses **DINCoordinator** only.
 ### Deploy platform contracts
 
 ```
-dincli dindao deploy din-coordinator --network <net>
+dincli dindao deploy din-coordinator --network <net> --artifact artifact_path ✅
 
-dincli dindao deploy din-token \
+dincli dindao deploy din-token \    
   --dinCoordinator <address> \
   --network <net>
 
-dincli dindao deploy din-stake \
+dincli dindao deploy din-validator-stake \   ✅
   --dinCoordinator <address> \
   --dinToken <address> \
   --network <net>
+  --artifact artifact_path
 ```
 
 ### Add platform-level slashers
@@ -284,8 +289,8 @@ Aggregator always interacts with **DINCoordinator (stake+token)** + **TaskCoordi
 ### Tokens & staking (DAO)
 
 ```
-dincli aggregator buy DINtokens <amount> --network <net>
-dincli aggregator stake DINtokens <amount> --network <net>
+dincli aggregator dintoken buy  <amount> --network <net>
+dincli aggregator dintoken stake <amount> --network <net>
 ```
 
 ### Registration (task-level)
