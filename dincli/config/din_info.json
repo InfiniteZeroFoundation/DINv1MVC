@@ -1,0 +1,20 @@
+{
+  "local": {
+    "coordinator": "0xd0C021931Bc6279dEe7a139b05F198038E9C53F7",
+    "token": "0xaF3DaAC80D4834536b7e65F03d76A2dBf37E4F55",
+    "stake": "0x0991d3831Ee86D349497039bB604FA1FB2aE0571",
+    "representative": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+  },
+  "sepolia": {
+    "coordinator": "0x...",
+    "token": "0x...",
+    "stake": "0x...",
+    "representative": "0x..."
+  },
+  "mainnet": {
+    "coordinator": "0x...",
+    "token": "0x...",
+    "stake": "0x...",
+    "representative": "0x..."
+  }
+}
