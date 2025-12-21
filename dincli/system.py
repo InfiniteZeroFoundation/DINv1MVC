@@ -685,4 +685,51 @@ def dump_abi(
     print(f"[cyan]→ ABI-only: {not include_bytecode} | Includes bytecode: {include_bytecode}[/cyan]")
     
     
+@app.command("add-role")    
+def add_role(
+    role: str = typer.Option(..., "--role", "-r", help="Role to add (e.g., 'auditor, aggregator, client')"),
+    model_id: int = typer.Option(..., "--model-id", "-m", help="Model ID to add role to"),
+):
+    if role not in ["auditor", "aggregator", "client"]:
+        print(f"[red]❌ Invalid role: {role}[/red]")
+        raise typer.Exit(1)
+
+    if model_id < 0:
+        print(f"[red]❌ Invalid model ID: {model_id}[/red]")
+        raise typer.Exit(1)
+
+    config_path = Path(CONFIG_DIR).resolve()
+    if not config_path.exists():
+        os.makedirs(config_path)
+    
+    role_dir_path = config_path / "roles"
+    if not role_dir_path.exists():
+        os.makedirs(role_dir_path)
+        
+    role_path = role_dir_path / f"{role}.json"
+
+    if role_path.exists():
+        with open(role_path, "r") as f:
+            data = json.load(f)
+        
+        if model_id in data["models"]:
+            print(f"[red]❌ Model ID {model_id} already exists for role {role}[/red]")
+            raise typer.Exit(1)
+        
+        data["models"].append(model_id)
+        with open(role_path, "w") as f:
+            json.dump(data, f, indent=2)
+        
+        print(f"[green]✅ Added model ID {model_id} to role {role}[/green]")
+        return
+    
+    with open(role_path, "w") as f:
+        json.dump({"models": [model_id]}, f, indent=2)
+    
+    print(f"[green]✅ Added model ID {model_id} to role {role}[/green]")
+
+    
+
+
+
     
