@@ -5,7 +5,7 @@
 dincli <role> <command> [options]
 ```
 
-Where `<role>` ∈ { `model-owner`, `validator`, `auditor`, `aggregator`, `dindao` }
+Where `<role>` ∈ { `model-owner`, `auditor`, `aggregator`, `dindao` }
 
 That’s the **Typer multi-app pattern**, which allows subcommands for each stakeholder role, e.g.:
 
@@ -16,94 +16,6 @@ dincli auditor verify
 dincli aggregator aggregate
 dincli dindao status
 ```
-
----
-
-### ✅ Here’s how to implement it cleanly
-
-#### **1. Modify `fastapi/pyapp/cli/main.py`**
-
-```python
-import typer
-from rich import print
-
-# Import role-specific subcommands
-from aggregator import app as aggregator_app
-from auditor import app as auditor_app
-from dindao import app as dindao_app
-from model_owner import app as model_owner_app
-
-app = typer.Typer(help="DIN Command Line Interface (DIN CLI)")
-
-# Add subcommands for roles
-app.add_typer(model_owner_app, name="model-owner")
-app.add_typer(aggregator_app, name="aggregator")
-app.add_typer(auditor_app, name="auditor")
-app.add_typer(dindao_app, name="dindao")
-
-@app.command()
-def version():
-    """Show current DIN CLI version."""
-    print("[bold cyan]DIN CLI[/bold cyan] version 0.1.0")
-
-if __name__ == "__main__":
-    app()
-```
-
----
-
-#### **2. Example of `model_owner.py`**
-
-```python
-import typer
-from rich import print
-
-app = typer.Typer(help="Commands for Model Owners in DIN.")
-
-@app.command()
-def train(dataset_path: str, dp_mode: str = "disabled"):
-    """
-    Train a local model with optional Differential Privacy (DP) mode.
-    """
-    print(f"[green]Training model with dataset:[/green] {dataset_path}")
-    print(f"[blue]DP Mode:[/blue] {dp_mode}")
-    # TODO: integrate fastapi/pyapp/services/client_services.py logic here
-
-@app.command()
-def upload(model_path: str):
-    """
-    Upload model to IPFS and register with DIN network.
-    """
-    print(f"Uploading model from path: {model_path}")
-    # TODO: integrate IPFS + smart contract registration logic
-```
-
----
-
-#### **3. Example of `validator.py`**
-
-You can create this new file later, but here’s the template:
-
-```python
-import typer
-from rich import print
-
-app = typer.Typer(help="Commands for Validators in DIN.")
-
-@app.command()
-def onboard():
-    """Register as a validator and stake tokens."""
-    print("[cyan]Initializing validator onboarding...[/cyan]")
-    # TODO: call smart contract (DinValidatorStake.sol) for staking
-
-@app.command()
-def status():
-    """Check validator staking status."""
-    print("Fetching staking and validator status...")
-    # TODO: query on-chain state and display
-```
-
----
 
 #### **4. Update `pyproject.toml`**
 
