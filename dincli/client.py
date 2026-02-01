@@ -104,6 +104,9 @@ def train_lms(
 
         if not client_service_path.exists():
             retrieve_from_ipfs(get_manifest_key(effective_network,"train_client_model_and_upload_to_ipfs", model_id)["ipfs"], client_service_path)
+        
+        if not model_service_path.exists():
+            retrieve_from_ipfs(get_manifest_key(effective_network,"ModelArchitecture", model_id)["ipfs"], model_service_path)
 
         fn = load_custom_fn(
             client_service_path,

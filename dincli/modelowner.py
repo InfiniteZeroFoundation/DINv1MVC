@@ -775,9 +775,19 @@ def submit_genesis(
             tasks_dir = Path.cwd() / 'tasks' / effective_network.lower()
             target_folder = tasks_dir / task_coordinator_address
 
+
             if get_manifest_key(effective_network, "getscoreforGM", None, task_coordinator_address)["type"] == "custom":
                 service_path_str = get_manifest_key(effective_network, "getscoreforGM", None, task_coordinator_address)["path"]
                 service_path = target_folder / Path(service_path_str)
+
+                if not service_path.exists():
+                    retrieve_from_ipfs(get_manifest_key(effective_network,"getscoreforGM", None, task_coordinator_address)["ipfs"], service_path)
+                
+                model_service_path_str = target_folder / get_manifest_key(effective_network, "ModelArchitecture", None, task_coordinator_address)["path"]
+                model_service_path = target_folder / Path(model_service_path_str)
+
+                if not model_service_path.exists():
+                    retrieve_from_ipfs(get_manifest_key(effective_network,"ModelArchitecture", None, task_coordinator_address)["ipfs"], model_service_path)
                 fn = load_custom_fn(service_path, "getscoreforGM")
                 accuracy = fn(0, ipfs_hash, target_folder)
         else:
@@ -1222,15 +1232,14 @@ def show_registered_aggregators(
 @gi_app.command()
 def show_state(
     network: str = typer.Option(None, "--network", help="Target network (local|sepolia|mainnet)"),
-    task_coordinator: str = typer.Option(None, "--taskCoordinator", help="DINTaskCoordinator contract address"),
+    model_id: str = typer.Option(None, "--model-id", help="Model ID"),
     gi: int = typer.Option(None, "--gi", help="Global iteration number"),
 ):
     effective_network = resolve_network(network)
     w3 = get_w3(effective_network)
     account = load_account()
     
-    if not task_coordinator:
-        task_coordinator = get_key(".env", "DINTaskCoordinator_Contract_Address")
+    task_coordinator_address = get_manifest_key(effective_network, "DINTaskCoordinator_Contract", model_id)
     
     artifact_path = Path(__file__).parent / "abis" / "DINTaskCoordinator.json"
     
@@ -1239,7 +1248,7 @@ def show_state(
         console.print("[red]Error:[/red] ABI file not found")
         raise typer.Exit(1)
     
-    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator)
+    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator_address)
     
     curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
     if gi:
@@ -1249,7 +1258,7 @@ def show_state(
 
     curr_GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
 
-    console.print(f"[bold green]Showing global iteration state for global iteration {curr_GI} on TaskCoordinator {task_coordinator}![/bold green]")
+    console.print(f"[bold green]Showing global iteration state for global iteration {curr_GI} on TaskCoordinator {task_coordinator_address}![/bold green]")
     console.print(f"[cyan]Network:[/cyan] {effective_network}")
     console.print(f"[cyan]From account:[/cyan] {account.address}")
     console.print(f"[cyan]Global iteration numerical state:[/cyan] {curr_GIstate}")
@@ -1809,15 +1818,14 @@ def start(
 @lms_evaluation_app.command()
 def close(
     network: str = typer.Option(None, "--network", help="Target network (local|sepolia|mainnet)"),
-    task_coordinator: str = typer.Option(None, "--taskCoordinator", help="DINTaskCoordinator contract address"),
+    model_id: str = typer.Option(..., "--model-id", help="Model ID"),
     gi: int = typer.Option(None, "--gi", help="Global iteration number"),
 ):
     effective_network = resolve_network(network)
     w3 = get_w3(effective_network)
     account = load_account()
     
-    if not task_coordinator:
-        task_coordinator = get_key(".env", "DINTaskCoordinator_Contract_Address")
+    task_coordinator_address = get_manifest_key(effective_network, "DINTaskCoordinator_Contract", model_id)
     
     artifact_path = Path(__file__).parent / "abis" / "DINTaskCoordinator.json"
     
@@ -1826,7 +1834,7 @@ def close(
         console.print("[red]Error:[/red] ABI file not found")
         raise typer.Exit(1)
     
-    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator)
+    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator_address)
 
     curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
 
@@ -1834,10 +1842,10 @@ def close(
     
     if gi:
         if gi!=curr_GI:
-            console.print("[red]Error:[/red] Invalid global iteration")
+            console.print("[red]Error:[/red] Invalid global iteration ",gi," current is ",curr_GI)
             raise typer.Exit(1)
     
-    console.print(f"[bold green]Closing LMS evaluation for global iteration {curr_GI}![/bold green]")
+    console.print(f"[bold green]Closing LMS evaluation for global iteration {curr_GI} on TaskCoordinator {task_coordinator_address}![/bold green]")
 
     if GIstate != GIstatestrToIndex("LMSevaluationStarted"):
         console.print("[red]Error:[/red] Can not close LMS evaluation at this time as GIstate is ",GIstateToStr(GIstate))
@@ -1857,27 +1865,26 @@ def close(
     if receipt.status == 0:
         console.print("[red]Error:[/red] Failed to close LMS evaluation for global iteration", curr_GI)
         raise typer.Exit(1)
-    console.print(f"[green]✓ LMS evaluation closed for global iteration {curr_GI}![/green]")
+    console.print(f"[green]✓ LMS evaluation closed for global iteration {curr_GI} on TaskCoordinator {task_coordinator_address}![/green]")
 
 @aggregation_app.command("create-t1nt2-batches")
 def create_tier1_tier2_batches(
     network: str = typer.Option(None, "--network", help="Network to use"),
-    task_coordinator: str = typer.Option(None, "--taskCoordinator", help="DINTaskCoordinator contract address"),
+    model_id: str = typer.Option(..., "--model-id", help="Model ID"),
     gi: int = typer.Option(None, "--gi", help="Global iteration number"),
 ):
     effective_network = resolve_network(network)
     w3 = get_w3(effective_network)
     account = load_account()
 
-    if not task_coordinator:
-        task_coordinator = get_key(".env", "DINTaskCoordinator_Contract_Address")
+    task_coordinator_address = get_manifest_key(effective_network, "DINTaskCoordinator_Contract", model_id)
     
     artifact_path = Path(__file__).parent / "abis" / "DINTaskCoordinator.json"
     if not artifact_path.exists():
         console.print("[red]Error:[/red] ABI file not found")
         raise typer.Exit(1)
         
-    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator)
+    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator_address)
     
     curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
     GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
@@ -1917,7 +1924,7 @@ def create_tier1_tier2_batches(
 @aggregation_app.command("show-t1-batches")
 def show_t1_batches(
     network: str = typer.Option(None, "--network", help="Network to use"),
-    task_coordinator: str = typer.Option(None, "--taskCoordinator", help="DINTaskCoordinator contract address"),
+    model_id: str = typer.Option(..., "--model-id", help="Model ID"),
     gi: int = typer.Option(None, "--gi", help="Global iteration number"),
     detailed: bool = typer.Option(False, "--detailed", help="Show detailed information"),
 ):
@@ -1925,11 +1932,10 @@ def show_t1_batches(
     w3 = get_w3(effective_network)
     account = load_account() 
 
-    if not task_coordinator:
-        task_coordinator = get_key(".env", "DINTaskCoordinator_Contract_Address")
+    task_coordinator_address = get_manifest_key(effective_network, "DINTaskCoordinator_Contract", model_id)
         
     artifact_path = Path(__file__).parent / "abis" / "DINTaskCoordinator.json"
-    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator)
+    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator_address)
 
     curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
     
@@ -1938,14 +1944,21 @@ def show_t1_batches(
     GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
 
 
-    if gi:
-        if curr_GI != gi:
-            console.print(f"[red]Error:[/red] invalid global iteration {gi} does not match current GI {curr_GI}")
+    if not gi:
+        ref_gi = curr_GI
+    else:
+        if gi > curr_GI:
+            console.print(f"[red]Error:[/red] Invalid global iteration {gi} given in command: gi > curr_GI ({curr_GI})")
             raise typer.Exit(1)
+        ref_gi = gi
 
-    if GIstate < GIstatestrToIndex("T1nT2Bcreated"):
+    if (ref_gi == curr_GI and GIstate >= GIstatestrToIndex("T1nT2Bcreated")) or (ref_gi < curr_GI):
+        console.print(f"[green]✓ Showing Tier 1 batches for GI {ref_gi} (GIstate: {GIstateToStr(GIstate)}) on network {effective_network} for model {model_id} on TaskCoordinator {task_coordinator_address}[/green]")
+
+    else:
         console.print(f"[red]Error:[/red] GI state is {GIstateToStr(GIstate)}. Batches do not exist yet.")
         raise typer.Exit(1)
+   
 
     t1_count = deployed_DINTaskCoordinatorContract.functions.tier1BatchCount(curr_GI).call()
     if not detailed:
@@ -1990,7 +2003,7 @@ def show_t1_batches(
 @aggregation_app.command("show-t2-batches")
 def show_t2_batches(
     network: str = typer.Option(None, "--network", help="Network to use"),
-    task_coordinator: str = typer.Option(None, "--taskCoordinator", help="DINTaskCoordinator contract address"),
+    model_id: str = typer.Option(None, "--model-id", help="Model ID"),
     gi: int = typer.Option(None, "--gi", help="Global iteration number"),
     detailed: bool = typer.Option(False, "--detailed", help="Show detailed information"),
 ):
@@ -1998,21 +2011,25 @@ def show_t2_batches(
     w3 = get_w3(effective_network)
     account = load_account() 
 
-    if not task_coordinator:
-        task_coordinator = get_key(".env", "DINTaskCoordinator_Contract_Address")
+    task_coordinator_address = get_manifest_key(effective_network, "DINTaskCoordinator_Contract", model_id)
         
     artifact_path = Path(__file__).parent / "abis" / "DINTaskCoordinator.json"
-    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator)
+    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator_address)
 
     curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
     GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
 
-    if gi:
-        if curr_GI != gi:
-            console.print(f"[red]Error:[/red] invalid global iteration {gi} does not match current GI {curr_GI}")
+    if not gi:
+        ref_gi = curr_GI
+    else:
+        if gi > curr_GI:
+            console.print(f"[red]Error:[/red] Invalid global iteration {gi} given in command: gi > curr_GI ({curr_GI})")
             raise typer.Exit(1)
-    
-    if GIstate < GIstatestrToIndex("T1nT2Bcreated"):
+        ref_gi = gi
+
+    if (ref_gi == curr_GI and GIstate >= GIstatestrToIndex("T1nT2Bcreated")) or (ref_gi < curr_GI):
+        console.print(f"[bold green]Showing Tier 2 batches for GI {ref_gi} (GIstate: {GIstateToStr(GIstate)}) on network {effective_network} for model {model_id} on TaskCoordinator {task_coordinator_address}![/bold green]")
+    else:
         console.print(f"[red]Error:[/red] GI state is {GIstateToStr(GIstate)}. Batches do not exist yet.")
         raise typer.Exit(1)
 
@@ -2021,7 +2038,7 @@ def show_t2_batches(
     
     table = Table(title=f"Tier 2 Batches (GI: {curr_GI})")
     table.add_column("Batch ID", justify="right", style="cyan")
-    table.add_column("Validators", style="magenta")
+    table.add_column("Aggregators", style="magenta")
     if detailed:
         table.add_column("Submitted CID", style="green")
     table.add_column("Finalized", style="yellow")
@@ -2046,18 +2063,17 @@ def show_t2_batches(
 @t1_app.command("start")
 def start_t1_aggregation(
     network: str = typer.Option(None, "--network", help="Network to use"),
-    task_coordinator: str = typer.Option(None, "--taskCoordinator", help="DINTaskCoordinator contract address"),
+    model_id: str = typer.Option(None, "--model-id", help="Model ID"),
     gi: int = typer.Option(None, "--gi", help="Global iteration number"),
 ):
     effective_network = resolve_network(network)
     w3 = get_w3(effective_network)
     account = load_account()
 
-    if not task_coordinator:
-        task_coordinator = get_key(".env", "DINTaskCoordinator_Contract_Address")
+    task_coordinator_address = get_manifest_key(effective_network, "DINTaskCoordinator_Contract", model_id)
         
     artifact_path = Path(__file__).parent / "abis" / "DINTaskCoordinator.json"
-    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator)
+    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator_address)
     
     curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
 
@@ -2093,18 +2109,17 @@ def start_t1_aggregation(
 @t1_app.command("close")
 def close_t1_aggregation(
     network: str = typer.Option(None, "--network", help="Network to use"),
-    task_coordinator: str = typer.Option(None, "--taskCoordinator", help="DINTaskCoordinator contract address"),
+    model_id: str = typer.Option(None, "--model-id", help="Model ID"),
     gi: int = typer.Option(None, "--gi", help="Global iteration number"),
 ):
     effective_network = resolve_network(network)
     w3 = get_w3(effective_network)
     account = load_account()
 
-    if not task_coordinator:
-        task_coordinator = get_key(".env", "DINTaskCoordinator_Contract_Address")
+    task_coordinator_address = get_manifest_key(effective_network, "DINTaskCoordinator_Contract", model_id)
         
     artifact_path = Path(__file__).parent / "abis" / "DINTaskCoordinator.json"
-    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator)
+    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator_address)
     
     curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
     GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
@@ -2118,7 +2133,7 @@ def close_t1_aggregation(
         console.print(f"[red]Error:[/red] GI state is {GIstateToStr(GIstate)}. GI state T1AggregationStarted not passed yet.")
         raise typer.Exit(1)
     
-    console.print(f"[bold green]Finalizing Tier 1 Aggregation for GI {curr_GI}...[/bold green]")
+    console.print(f"[bold green]Finalizing Tier 1 Aggregation for GI {curr_GI}... on model {model_id} and network {effective_network} and task coordinator {task_coordinator_address}![/bold green]")
     
     tx = deployed_DINTaskCoordinatorContract.functions.finalizeT1Aggregation(curr_GI).build_transaction({
         "from": account.address,
@@ -2139,18 +2154,17 @@ def close_t1_aggregation(
 @t2_app.command("start")
 def start_t2_aggregation(
     network: str = typer.Option(None, "--network", help="Network to use"),
-    task_coordinator: str = typer.Option(None, "--taskCoordinator", help="DINTaskCoordinator contract address"),
+    model_id: str = typer.Option(None, "--model-id", help="Model ID"),
     gi: int = typer.Option(None, "--gi", help="Global iteration number"),
 ):
     effective_network = resolve_network(network)
     w3 = get_w3(effective_network)
     account = load_account()
 
-    if not task_coordinator:
-        task_coordinator = get_key(".env", "DINTaskCoordinator_Contract_Address")
+    task_coordinator_address = get_manifest_key(effective_network, "DINTaskCoordinator_Contract", model_id)
         
     artifact_path = Path(__file__).parent / "abis" / "DINTaskCoordinator.json"
-    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator)
+    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator_address)
     
     curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
 
@@ -2165,7 +2179,7 @@ def start_t2_aggregation(
         console.print(f"[red]Error:[/red] GI state is {GIstateToStr(GIstate)}. GI state T1AggregationDone not passed yet.")
         raise typer.Exit(1)
     
-    console.print(f"[bold green]Starting Tier 2 Aggregation for GI {curr_GI}...[/bold green]")
+    console.print(f"[bold green]Starting Tier 2 Aggregation for GI {curr_GI}... on model {model_id} and network {effective_network} and task coordinator {task_coordinator_address}![/bold green]")
     
     tx = deployed_DINTaskCoordinatorContract.functions.startT2Aggregation(curr_GI).build_transaction({
         "from": account.address,
@@ -2185,27 +2199,32 @@ def start_t2_aggregation(
 @t2_app.command("close")
 def close_t2_aggregation(
     network: str = typer.Option(None, "--network", help="Network to use"),
-    task_coordinator: str = typer.Option(None, "--taskCoordinator", help="DINTaskCoordinator contract address"),
+    model_id: str = typer.Option(None, "--model-id", help="Model ID"),
+    gi: int = typer.Option(None, "--gi", help="Global iteration number"),
 ):
     effective_network = resolve_network(network)
     w3 = get_w3(effective_network)
     account = load_account()
 
-    if not task_coordinator:
-        task_coordinator = get_key(".env", "DINTaskCoordinator_Contract_Address")
+    task_coordinator_address = get_manifest_key(effective_network, "DINTaskCoordinator_Contract", model_id)
         
     artifact_path = Path(__file__).parent / "abis" / "DINTaskCoordinator.json"
-    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator)
+    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator_address)
     
     curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
 
     GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
 
+    if gi:
+        if curr_GI != gi:
+            console.print(f"[red]Error:[/red] invalid global iteration {gi} does not match current GI {curr_GI}")
+            raise typer.Exit(1)
+
     if GIstate < GIstatestrToIndex("T2AggregationStarted"):
         console.print(f"[red]Error:[/red] GI state is {GIstateToStr(GIstate)}. GI state T2AggregationStarted not passed yet.")
         raise typer.Exit(1)
     
-    console.print(f"[bold green]Finalizing Tier 2 Aggregation for GI {curr_GI}...[/bold green]")
+    console.print(f"[bold green]Finalizing Tier 2 Aggregation for GI {curr_GI}... on model {model_id} and network {effective_network} and task coordinator {task_coordinator_address}![/bold green]")
     
     # 1. Finalize T2 Aggregation
     console.print("[cyan]Calling finalizeT2Aggregation...[/cyan]")
@@ -2230,7 +2249,42 @@ def close_t2_aggregation(
     
     # 3. Calculate score
     console.print("[cyan]Calculating score for final model...[/cyan]")
-    accuracy = getscoreforGM(curr_GI, finalCID)
+
+    if get_manifest_key(effective_network, "getscoreforGM", model_id)["type"] == "custom":
+        model_base_path = Path(CACHE_DIR) / effective_network /  f"model_{model_id}" 
+        service_path_str = get_manifest_key(effective_network, "getscoreforGM", model_id)["path"]
+
+        model_service_path_str = get_manifest_key(effective_network, "ModelArchitecture", model_id)["path"]
+
+        custom_modelowner_service_path = model_base_path / Path(service_path_str)
+        
+        custom_model_service_path = model_base_path / Path(model_service_path_str)
+
+        if not custom_modelowner_service_path.exists():
+            retrieve_from_ipfs(get_manifest_key(effective_network,"getscoreforGM", model_id)["ipfs"], custom_modelowner_service_path)
+
+        if not custom_model_service_path.exists():
+            retrieve_from_ipfs(get_manifest_key(effective_network,"ModelArchitecture", model_id)["ipfs"], custom_model_service_path)
+
+        fn = load_custom_fn(
+            custom_modelowner_service_path,
+            "getscoreforGM")
+
+        if not (Path(model_base_path)/"models"/"genesis_model.pth").exists():
+            retrieve_from_ipfs(get_manifest_key(effective_network,"Genesis_Model_CID", model_id), str(Path(model_base_path)/"models"/"genesis_model.pth"))
+
+        if not (Path(model_base_path)/"dataset"/"test"/"test_dataset.pt").exists():
+            console.print("[red]Error:[/red] Test dataset not found at ", str(Path(model_base_path)/"dataset"/"test"/"test_dataset.pt"))
+            console.print("[yellow]Warning:[/yellow] please ensure the test dataset is present at ", str(Path(model_base_path)/"dataset"/"test"/"test_dataset.pt"))
+            raise typer.Exit(1) 
+
+
+        
+        accuracy = fn(curr_GI, finalCID, model_base_path)
+
+    else:
+        accuracy = getscoreforGM(curr_GI, finalCID)
+
     console.print(f"[green]Accuracy:[/green] {accuracy}")
     
     # 4. Set Tier 2 score
@@ -2254,22 +2308,25 @@ def close_t2_aggregation(
 @slash_app.command("auditors")
 def slash_auditors(
     network: str = typer.Option(None, "--network", help="Network to use"),
-    task_coordinator: str = typer.Option(None, "--taskCoordinator", help="DINTaskCoordinator contract address"),
+    model_id: int = typer.Option(..., "--model-id", help="Model ID"),
     gi: int = typer.Option(None, "--gi", help="Global iteration number"),
 ):
     effective_network = resolve_network(network)
     w3 = get_w3(effective_network)
     account = load_account()
 
-    if not task_coordinator:
-        task_coordinator = get_key(".env", "DINTaskCoordinator_Contract_Address")
-        
+    task_coordinator_address = get_manifest_key(effective_network, "DINTaskCoordinator_Contract", model_id)
+    
     artifact_path = Path(__file__).parent / "abis" / "DINTaskCoordinator.json"
-    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator)
+    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator_address)
     
     curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
 
     GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
+
+    if gi is not None and curr_GI != gi:
+        console.print(f"[red]Error:[/red] GI is {curr_GI}. GI {gi} not passed yet.")
+        raise typer.Exit(1)
 
     if GIstate < GIstatestrToIndex("T2AggregationDone"):
         console.print(f"[red]Error:[/red] GI state is {GIstateToStr(GIstate)}. GI state T2AggregationDone not passed yet.")
@@ -2278,7 +2335,7 @@ def slash_auditors(
     console.print(f"[bold green]Slashing for GI {curr_GI}...[/bold green]")
     
     # 1. Slash
-    console.print(f"[cyan]Calling slashAuditors... for GI {curr_GI} with account {account.address} on task coordinator {task_coordinator}[/cyan]")
+    console.print(f"[cyan]Calling slashAuditors... for GI {curr_GI} with account {account.address} on task coordinator {task_coordinator_address}[/cyan]")
     tx = deployed_DINTaskCoordinatorContract.functions.slashAuditors(curr_GI).build_transaction({
         "from": account.address,
         "gas": 3000000,
@@ -2303,27 +2360,25 @@ def slash_auditors(
 @slash_app.command("aggregators")
 def slash_aggregators(
     network: str = typer.Option(None, "--network", help="Network to use"),
-    task_coordinator: str = typer.Option(None, "--taskCoordinator", help="DINTaskCoordinator contract address"),
+    model_id: int = typer.Option(..., "--model-id", help="Model ID"),
     gi: int = typer.Option(None, "--gi", help="Global iteration number"),
 ):
     effective_network = resolve_network(network)
     w3 = get_w3(effective_network)
     account = load_account()
 
-    if not task_coordinator:
-        task_coordinator = get_key(".env", "DINTaskCoordinator_Contract_Address")
-        
+    task_coordinator_address = get_manifest_key(effective_network, "DINTaskCoordinator_Contract", model_id)
+    
     artifact_path = Path(__file__).parent / "abis" / "DINTaskCoordinator.json"
-    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator)
+    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator_address)
     
     curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
 
     GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
 
-    if gi:
-        if curr_GI != gi:
-            console.print(f"[red]Error:[/red] invalid GI, current GI is {curr_GI}")
-            raise typer.Exit(1)
+    if gi is not None and curr_GI != gi:
+        console.print(f"[red]Error:[/red] invalid GI, current GI is {curr_GI}")
+        raise typer.Exit(1)
 
     if GIstate < GIstatestrToIndex("AuditorsSlashed"):
         console.print(f"[red]Error:[/red] GI state is {GIstateToStr(GIstate)}. GI state AuditorsSlashed not passed yet.")
@@ -2357,25 +2412,23 @@ def slash_aggregators(
 @gi_app.command()
 def end(
     network: str = typer.Option(None, "--network", help="Network to use"),
-    task_coordinator: str = typer.Option(None, "--taskCoordinator", help="DINTaskCoordinator contract address"),
+    model_id: int = typer.Option(..., "--model-id", help="Model ID"),
     gi: int = typer.Option(None, "--gi", help="Global iteration number"),
 ):
     effective_network = resolve_network(network)
     w3 = get_w3(effective_network)
     account = load_account()
 
-    if not task_coordinator:
-        task_coordinator = get_key(".env", "DINTaskCoordinator_Contract_Address")
-        
+    task_coordinator_address = get_manifest_key(effective_network, "DINTaskCoordinator_Contract", model_id)
+    
     artifact_path = Path(__file__).parent / "abis" / "DINTaskCoordinator.json"
-    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator)
+    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator_address)
     
     curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
 
     GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
 
-    if gi:
-        if curr_GI != gi:
+    if gi is not None and curr_GI != gi:
             console.print(f"[red]Error:[/red] invalid GI, current GI is {curr_GI}")
             raise typer.Exit(1)
 
@@ -2416,6 +2469,7 @@ def show(
     auditors: bool = typer.Option(False, "--auditors", help="Show auditor evaluations"),
     gi: int = typer.Option(None, "--gi", help="Global iteration number"),
     model_id: str = typer.Option(None, "--model-id", help="Model ID"),
+    models: bool = typer.Option(False, "--models", help="Show auditors lms evaluations per lms"),
 ):
     effective_network = resolve_network(network)
     w3 = get_w3(effective_network)
@@ -2450,93 +2504,83 @@ def show(
         console.print(f"[red]Error:[/red] GI state is {GIstateToStr(GIstate)}. GI state AuditorsBatchesCreated not passed yet.")
         raise typer.Exit(1)
     
-
-    audtor_batch_count = deployed_DINTaskAuditorContract.functions.AuditorsBatchCount(curr_GI).call()
-
-    model_idx_to_batch_id = {}
-    model_idx_to_test_cid = {}
-    raw_audit_batches = []
-    auditor_batch = {}
-
+    # load lm submissions (client models) once
     raw_lm_submissions = deployed_DINTaskAuditorContract.functions.getClientModels(curr_GI).call()
-
     lm_submissions = {}
-    relevant_lm_submissions = {}
-
-    assigned_lm_submissions = {}
-
-    if auditors:
-        all_auditors = set()
-
-        for i in range(audtor_batch_count):
-            raw_audit_batches.append(deployed_DINTaskAuditorContract.functions.getAuditorsBatch(curr_GI, i).call())
-        
-        for batch_data in raw_audit_batches:
-            batch_id, auditors, model_indexes, test_cid = batch_data
-
-            for a in auditors:
-                auditor_batch[a]=auditor_batch.get(a, {"raw_batches": []})
-                auditor_batch[a]["raw_batches"].append({"batch_id": batch_id, "model_indexes": model_indexes, "test_cid": test_cid})
-
-            all_auditors.update(auditors)
-
-        for a in all_auditors:
-            auditor_batch[a]["batch_count"] = len(auditor_batch[a]["raw_batches"])
-
-            relevant_lm_submissions[a] = set()
-
-            for batch in auditor_batch[a]["raw_batches"]:
-                relevant_lm_submissions[a].update(batch["model_indexes"])
-
-                for model_idx in batch["model_indexes"]:
-                    model_idx_to_batch_id[model_idx] = batch["batch_id"]
-                    model_idx_to_test_cid[model_idx] = batch["test_cid"]
-
     for idx, sub in enumerate(raw_lm_submissions):
         client, model_cid, submitted_at, eligible, evaluated, approved, final_avg = sub
+        lm_submissions[idx] = {
+            "model_index": idx,
+            "client": client,
+            "model_cid": model_cid,
+            "submitted_at": submitted_at,
+            "eligible": eligible,
+            "evaluated": evaluated,
+            "approved": approved,
+            "final_avg": final_avg,
+        }
 
-        lm_submissions[idx] = {"model_index": idx, "client": client, "model_cid": model_cid, "submitted_at": submitted_at, "eligible": eligible, "evaluated": evaluated, "approved": approved, "final_avg": final_avg}
+    # Precompute audit batches and mappings only if needed (auditors view or models view)
+    audtor_batch_count = deployed_DINTaskAuditorContract.functions.AuditorsBatchCount(curr_GI).call()
+    model_idx_to_batch_id = {}
+    model_idx_to_test_cid = {}
+    batch_id_to_auditors = {}
+    model_idx_to_auditors = {}
+    all_auditors = set()
 
-        if auditors:
+    if auditors or models:
+        raw_audit_batches = []
+        for i in range(audtor_batch_count):
+            batch = deployed_DINTaskAuditorContract.functions.getAuditorsBatch(curr_GI, i).call()
+            if batch:
+                raw_audit_batches.append(batch)
 
-            for auditor in all_auditors:
-                assigned_lm_submissions[auditor] = assigned_lm_submissions.get(auditor, [])
+        for batch_data in raw_audit_batches:
+            batch_id, batch_auditors, model_indexes, test_cid = batch_data
+            batch_id_to_auditors[batch_id] = list(batch_auditors)
+            for m_idx in model_indexes:
+                model_idx_to_batch_id[m_idx] = batch_id
+                model_idx_to_test_cid[m_idx] = test_cid
+                # collect auditors assigned to each model
+                model_idx_to_auditors.setdefault(m_idx, set()).update(batch_auditors)
+            all_auditors.update(batch_auditors)
 
-                if idx not in relevant_lm_submissions[auditor]:
+        # normalize model_idx_to_auditors sets to lists
+        for k in model_idx_to_auditors:
+            model_idx_to_auditors[k] = sorted(model_idx_to_auditors[k])
+
+    # If auditors view requested: build per-auditor assigned models and their on-chain states
+    assigned_lm_submissions = {}
+    if auditors:
+        for auditor_addr in sorted(all_auditors):
+            assigned_lm_submissions[auditor_addr] = []
+            # find models assigned to this auditor by scanning model_idx_to_auditors
+            for model_idx, auditors_list in model_idx_to_auditors.items():
+                if auditor_addr not in auditors_list:
                     continue
-                else:
-                    batch_id = model_idx_to_batch_id[idx]
+                batch_id = model_idx_to_batch_id.get(model_idx)
+                has_voted = deployed_DINTaskAuditorContract.functions.hasAuditedLM(curr_GI, batch_id, auditor_addr, model_idx).call()
+                is_eligible = deployed_DINTaskAuditorContract.functions.LMeligibleVote(curr_GI, batch_id, auditor_addr, model_idx).call()
+                audit_scores = deployed_DINTaskAuditorContract.functions.auditScores(curr_GI, batch_id, auditor_addr, model_idx).call()
 
-                    try:
-                        has_voted = deployed_DINTaskAuditorContract.functions.hasAuditedLM(curr_GI, batch_id, auditor, idx).call()
-                    except:
-                        has_voted = False
-                    
-                    try:
-                        is_eligible = deployed_DINTaskAuditorContract.functions.LMeligibleVote(curr_GI, batch_id, auditor, idx).call()
-                    except:
-                        is_eligible = False
-                    
-                    try:
-                        has_auditScores = deployed_DINTaskAuditorContract.functions.auditScores(curr_GI, batch_id, auditor, idx).call()
-                    except:
-                        has_auditScores = False
+                lm = lm_submissions.get(model_idx)
+                client = lm["client"] if lm else "Unknown"
+                model_cid = lm["model_cid"] if lm else "N/A"
+                test_cid = model_idx_to_test_cid.get(model_idx)
 
-                    assigned_lm_submissions[auditor].append({
-                        "model_index": idx,
-                        "client": client,
-                        "model_cid": model_cid,
-                        "submitted_at": submitted_at,
-                        "batch_id": batch_id,
-                        "has_voted": has_voted,
-                        "is_eligible": is_eligible,
-                        "has_auditScores": has_auditScores,
-                        "test_cid": model_idx_to_test_cid[idx]
-                    })
-                    
+                assigned_lm_submissions[auditor_addr].append({
+                    "model_index": model_idx,
+                    "client": client,
+                    "model_cid": model_cid,
+                    "batch_id": batch_id,
+                    "has_voted": has_voted,
+                    "is_eligible": is_eligible,
+                    "audit_scores": audit_scores,
+                    "test_cid": test_cid,
+                })
 
+    # Print LM submissions table (keeps your existing output)
     lm_submissions_table = Table(title=f"LM Submissions for GI {curr_GI}", show_header=True, header_style="bold magenta")
-
     lm_submissions_table.add_column("Model Index", style="dim")
     lm_submissions_table.add_column("Client", overflow="fold")
     lm_submissions_table.add_column("Model CID", overflow="fold")
@@ -2559,34 +2603,69 @@ def show(
         )
     console.print(lm_submissions_table)
 
+    # Print per-auditor assigned tables if requested
     if auditors:
-
-        for auditor in all_auditors:
-            
-            assigned_lm_submissions_table = Table(title=f"Assigned LM Submissions for GI {curr_GI} for auditor {auditor}", show_header=True, header_style="bold magenta")
-
+        for auditor_addr in sorted(assigned_lm_submissions.keys()):
+            assigned_lm_submissions_table = Table(
+                title=f"Assigned LM Submissions for GI {curr_GI} for auditor {auditor_addr}",
+                show_header=True,
+                header_style="bold magenta"
+            )
             assigned_lm_submissions_table.add_column("Model Index", style="dim")
             assigned_lm_submissions_table.add_column("Client", overflow="fold")
             assigned_lm_submissions_table.add_column("Model CID", overflow="fold")
-            assigned_lm_submissions_table.add_column("Submitted At", overflow="fold")
             assigned_lm_submissions_table.add_column("Batch ID", overflow="fold")
             assigned_lm_submissions_table.add_column("Has Voted", overflow="fold")
             assigned_lm_submissions_table.add_column("Is Eligible", overflow="fold")
-            assigned_lm_submissions_table.add_column("Has AuditScores", overflow="fold")
+            assigned_lm_submissions_table.add_column("Audit Scores", overflow="fold")
             assigned_lm_submissions_table.add_column("Test CID", overflow="fold")
 
-            for idx, sub in enumerate(assigned_lm_submissions[auditor]):
+            for sub in assigned_lm_submissions[auditor_addr]:
                 assigned_lm_submissions_table.add_row(
                     str(sub["model_index"]),
                     str(sub["client"]),
                     str(sub["model_cid"]),
-                    str(sub["submitted_at"]),
                     str(sub["batch_id"]),
                     str(sub["has_voted"]),
                     str(sub["is_eligible"]),
-                    str(sub["has_auditScores"]),
-                    str(sub["test_cid"]) if sub["test_cid"] != "None" else "—"
+                    str(sub["audit_scores"]) if sub["audit_scores"] is not None else "—",
+                    str(sub["test_cid"]) if sub["test_cid"] is not None else "—"
                 )
             console.print(assigned_lm_submissions_table)
+
+    # Print per-model evaluation tables if requested (--models)
+    if models:
+        # iterate through all models (sorted)
+        for model_idx in sorted(lm_submissions.keys()):
+            batch_id = model_idx_to_batch_id.get(model_idx)
+            auditors_for_model = model_idx_to_auditors.get(model_idx, [])
+            model_eval_table = Table(title=f"Evaluations for Model {model_idx} (GI {curr_GI})", show_header=True, header_style="bold cyan")
+            model_eval_table.add_column("Auditor", overflow="fold")
+            model_eval_table.add_column("Batch ID", style="dim")
+            model_eval_table.add_column("Has Voted")
+            model_eval_table.add_column("Is Eligible")
+            model_eval_table.add_column("Audit Scores", overflow="fold")
+
+            if not auditors_for_model:
+                model_eval_table.add_row("—", str(batch_id) if batch_id is not None else "—", "—", "—", "—")
+            else:
+                for auditor_addr in auditors_for_model:
+                    has_voted = deployed_DINTaskAuditorContract.functions.hasAuditedLM(curr_GI, batch_id, auditor_addr, model_idx).call()
+                    is_eligible = deployed_DINTaskAuditorContract.functions.LMeligibleVote(curr_GI, batch_id, auditor_addr, model_idx).call()
+                    audit_scores = deployed_DINTaskAuditorContract.functions.auditScores(curr_GI, batch_id, auditor_addr, model_idx).call()
+                    model_eval_table.add_row(
+                        str(auditor_addr),
+                        str(batch_id),
+                        str(has_voted),
+                        str(is_eligible),
+                        str(audit_scores) if audit_scores is not None else "—"
+                    )
+            console.print(model_eval_table)
+            test_cid = model_idx_to_test_cid.get(model_idx)
+            if test_cid:
+                console.print(f"[dim]Test CID for model {model_idx}'s batch: {test_cid}[/dim]")
+
+
+
+
     
-            

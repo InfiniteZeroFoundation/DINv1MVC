@@ -223,6 +223,32 @@ def get_demo_private_key(account_index: int) -> str:
     return accounts[account_index]["private_key"]
 
 
+def get_demo_account_index(address: str) -> int:
+    """Find index of Hardhat dev account by address."""
+    # Path to accounts.json (relative to dincli package)
+    accounts_file = Path(__file__).parent / "config" / "accounts.json"
+
+    if not accounts_file.exists():
+        raise FileNotFoundError(
+            f"Demo accounts file not found: {accounts_file}\n"
+            "Run `npx hardhat export-accounts` to generate it."
+        )
+
+    with open(accounts_file) as f:
+        data = json.load(f)
+
+    accounts = data.get("hardhat", [])
+    
+    # Normalize input address
+    target_address = address.lower()
+    
+    for idx, account in enumerate(accounts):
+        if account["address"].lower() == target_address:
+            return idx
+            
+    raise ValueError(f"Address {address} not found in demo accounts.")
+
+
 def load_account() -> Account:
     """Load wallet from ~/.din/wallet.json (handles demo + encrypted modes)."""
 

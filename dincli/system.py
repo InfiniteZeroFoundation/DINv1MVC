@@ -529,6 +529,25 @@ def read_wallet():
         print(f"[red]❌ {e}[/red]")
         raise typer.Exit(1)
 
+
+@app.command("show-index")
+def show_index(
+    address: str = typer.Option(..., "--address", "-a", help="Address of the contract"),
+):
+    """
+    Show the index of the the account address in demo mode.
+    """
+    from dincli.utils import get_demo_account_index
+    try:
+        index = get_demo_account_index(address)
+        print(f"[green]Account Index:[/green] {index}")
+    except ValueError as e:
+        print(f"[red]{e}[/red]")
+        raise typer.Exit(1)
+    except FileNotFoundError as e:
+        print(f"[red]{e}[/red]")
+        raise typer.Exit(1)
+
 @app.command()
 def din_info(
     coordinator: bool = typer.Option(False, "--coordinator", help="Show coordinator address"),

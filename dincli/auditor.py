@@ -540,9 +540,15 @@ def evaluate_lms(
             if get_manifest_key(effective_network, "Score_model_by_auditor", model_id)["type"] == "custom":
                 auditor_service_path_str = get_manifest_key(effective_network, "Score_model_by_auditor", model_id)["path"]
                 auditor_service_path = Path(model_base_dir) / auditor_service_path_str
+
+                model_service_path_str = model_base_dir / get_manifest_key(effective_network, "ModelArchitecture", model_id)["path"]
+                model_service_path = model_base_dir / Path(model_service_path_str)
            
                 if not auditor_service_path.exists():
                     retrieve_from_ipfs(get_manifest_key(effective_network,"Score_model_by_auditor", model_id)["ipfs"], auditor_service_path)
+                
+                if not model_service_path.exists():
+                    retrieve_from_ipfs(get_manifest_key(effective_network,"ModelArchitecture", model_id)["ipfs"], model_service_path)
                     
                 fn = load_custom_fn(
                 auditor_service_path,
