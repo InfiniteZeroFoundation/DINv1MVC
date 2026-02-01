@@ -10,14 +10,17 @@ from .aggregator import app as aggregators_app
 from .auditor import app as auditor_app
 from .client import app as client_app
 from .task import app as task_app
+from .ipfs import app as ipfs_app
 
 from dincli.utils import get_config, resolve_network
 
 
 from dincli import __version__
 
-app = typer.Typer(help="DIN Command Line Interface (CLI) — Validators, Auditors, and Model Owners.",
-                  )
+app = typer.Typer(
+    help="DIN Command Line Interface (CLI) — Validators, Auditors, and Model Owners.",
+    pretty_exceptions_enable=True
+    )
 console = Console()
 
 
@@ -35,6 +38,7 @@ app.add_typer(aggregators_app, name="aggregator")
 app.add_typer(auditor_app, name="auditor")
 app.add_typer(client_app, name="client")
 app.add_typer(task_app, name="task")
+app.add_typer(ipfs_app, name="ipfs")
 
 @app.callback(invoke_without_command=True)
 def main(

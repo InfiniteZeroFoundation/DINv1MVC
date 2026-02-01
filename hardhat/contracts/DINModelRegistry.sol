@@ -12,6 +12,10 @@ interface IDinValidatorStake {
     ) external view returns (bool);
 }
 
+interface IOwnable {
+    function owner() external view returns (address);
+}
+
 contract DINModelRegistry {
     /*//////////////////////////////////////////////////////////////
                                 ERRORS
@@ -29,10 +33,10 @@ contract DINModelRegistry {
         uint256 indexed modelId,
         address indexed owner,
         bool isOpenSource,
-        string manifestoCID
+        string manifestCID
     );
 
-    event ManifestoUpdated(uint256 indexed modelId, string newManifestoCID);
+    event ManifestUpdated(uint256 indexed modelId, string newManifestCID);
 
     event ProprietaryFeeUpdated(uint256 newFee);
     event FeesWithdrawn(address indexed to, uint256 amount);
@@ -43,7 +47,7 @@ contract DINModelRegistry {
     struct Model {
         address owner;
         bool isOpenSource;
-        string manifestoCID;
+        string manifestCID;
         address taskCoordinator;
         address taskAuditor;
         uint256 createdAt;
@@ -84,11 +88,11 @@ contract DINModelRegistry {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Register a new AI model
-    /// @param manifestoCID IPFS CID containing model manifesto & logic pointers
+    /// @param manifestCID IPFS CID containing model manifest & logic pointers
     /// @param isOpenSource Whether the model is open-source or proprietary
     /// @return modelId Assigned model ID (array index)
     function registerModel(
-        string calldata manifestoCID,
+        string calldata manifestCID,
         address taskCoordinator,
         address taskAuditor,
         bool isOpenSource
@@ -108,6 +112,31 @@ contract DINModelRegistry {
             "Task Auditor is not a slasher"
         );
 
+        require(
+            taskCoordinator != taskAuditor,
+            "Task Coordinator and Task Auditor cannot be the same"
+        );
+
+        require(
+            taskCoordinator != msg.sender,
+            "Task Coordinator cannot be the model owner"
+        );
+
+        require(
+            taskAuditor != msg.sender,
+            "Task Auditor cannot be the model owner"
+        );
+
+        require(
+            IOwnable(taskCoordinator).owner() == msg.sender,
+            "Task Coordinator is not owned by the model owner"
+        );
+
+        require(
+            IOwnable(taskAuditor).owner() == msg.sender,
+            "Task Auditor is not owned by the model owner"
+        );
+
         if (_modelIdByTaskCoordinator[taskCoordinator] != 0)
             revert TaskCoordinatorAlreadyRegistered();
         if (_modelIdByTaskAuditor[taskAuditor] != 0)
@@ -117,7 +146,7 @@ contract DINModelRegistry {
             Model({
                 owner: msg.sender,
                 isOpenSource: isOpenSource,
-                manifestoCID: manifestoCID,
+                manifestCID: manifestCID,
                 taskCoordinator: taskCoordinator,
                 taskAuditor: taskAuditor,
                 createdAt: block.timestamp
@@ -128,21 +157,21 @@ contract DINModelRegistry {
         _modelIdByTaskCoordinator[taskCoordinator] = modelId + 1;
         _modelIdByTaskAuditor[taskAuditor] = modelId + 1;
 
-        emit ModelRegistered(modelId, msg.sender, isOpenSource, manifestoCID);
+        emit ModelRegistered(modelId, msg.sender, isOpenSource, manifestCID);
     }
 
     /*//////////////////////////////////////////////////////////////
                           MODEL MAINTENANCE
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Update manifesto CID (owner only)
-    function updateManifesto(
+    /// @notice Update manifest CID (owner only)
+    function updateManifest(
         uint256 modelId,
-        string calldata newManifestoCID
+        string calldata newManifestCID
     ) external onlyModelOwner(modelId) {
-        models[modelId].manifestoCID = newManifestoCID;
+        models[modelId].manifestCID = newManifestCID;
 
-        emit ManifestoUpdated(modelId, newManifestoCID);
+        emit ManifestUpdated(modelId, newManifestCID);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -158,12 +187,21 @@ contract DINModelRegistry {
             address owner,
             bool isOpenSource,
             string memory manifestoCID,
-            uint256 createdAt
+            uint256 createdAt,
+            address taskCoordinator,
+            address taskAuditor
         )
     {
         if (modelId >= models.length) revert InvalidModelId();
         Model storage m = models[modelId];
-        return (m.owner, m.isOpenSource, m.manifestoCID, m.createdAt);
+        return (
+            m.owner,
+            m.isOpenSource,
+            m.manifestCID,
+            m.createdAt,
+            m.taskCoordinator,
+            m.taskAuditor
+        );
     }
 
     function totalModels() external view returns (uint256) {

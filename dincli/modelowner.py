@@ -6,9 +6,9 @@ from rich.table import Table
 from typing import Optional
 from rich.console import Console
 from dotenv import dotenv_values, set_key, get_key, unset_key
-from dincli.utils import resolve_network, get_w3, load_account, load_din_info, load_usdt_config, GIstatestrToIndex, GIstateToStr, load_custom_fn
+from dincli.utils import resolve_network, get_w3, load_account, load_din_info, load_usdt_config, GIstatestrToIndex, GIstateToStr, load_custom_fn, cache_manifest, get_manifest_key, CACHE_DIR, is_ethereum_address
 from dincli.contract_utils import get_contract_instance
-
+from dincli.services.ipfs import retrieve_from_ipfs, upload_to_ipfs
 from dincli.system import connect_wallet
 from dincli.services.modelowner import getGenesisModelIpfs, getscoreforGM, create_audit_testDataCIDs
 
@@ -111,11 +111,11 @@ def task_coordinator(
     # Save to .env
     env_path = Path(".env")
     if env_path.exists():
-        set_key(".env", "DINTaskCoordinator_Contract_Address", dintaskcoordinator_contract_address)
-        print(f"[green]✓ Saved DINTaskCoordinator address to .env[/green]")
+        set_key(".env", effective_network.upper()+"_DINTaskCoordinator_Contract_Address", dintaskcoordinator_contract_address)
+        print(f"[green]✓ Saved DINTaskCoordinator address to {os.getcwd()}/.env as {effective_network.upper()}_DINTaskCoordinator_Contract_Address[/green]")
     else:
         print(f"[yellow]Warning:[/yellow] .env file not found. Address not saved.")
-        print(f"[yellow]Please manually add to .env:[/yellow] DINTaskCoordinator_Contract_Address={dintaskcoordinator_contract_address}")
+        print(f"[yellow]Please manually add to {os.getcwd()}/.env:[/yellow] {effective_network.upper()}_DINTaskCoordinator_Contract_Address={dintaskcoordinator_contract_address}")
 
 
 @deploy_app.command()
@@ -182,11 +182,11 @@ def task_auditor(
         task_coordinator_address = task_coordinator
     else:
         env_config = dotenv_values(".env")
-        task_coordinator_address = env_config.get("DINTaskCoordinator_Contract_Address")
+        task_coordinator_address = env_config.get(effective_network.upper()+"_DINTaskCoordinator_Contract_Address")
         
         if not task_coordinator_address:
             print("[red]Error:[/red] DINTaskCoordinator contract address not found.")
-            print("[yellow]Please provide --task-coordinator or ensure DINTaskCoordinator_Contract_Address is set in .env[/yellow]")
+            print(f"[yellow]Please provide --task-coordinator or ensure {effective_network.upper()}_DINTaskCoordinator_Contract_Address is set in {os.getcwd()}/.env[/yellow]")
             raise typer.Exit(1)
     
     print(f"[bold green]Deploying DINTaskAuditor on network:[/bold green] {effective_network}")
@@ -225,11 +225,11 @@ def task_auditor(
     # Save to .env
     env_path = Path(".env")
     if env_path.exists():
-        set_key(".env", "DINTaskAuditor_Contract_Address", dintaskauditor_contract_address)
-        print(f"[green]✓ Saved DINTaskAuditor address to .env[/green]")
+        set_key(".env", effective_network.upper() + "_"+task_coordinator_address+"_DINTaskAuditor_Contract_Address", dintaskauditor_contract_address)
+        print(f"[green]✓ Saved DINTaskAuditor address to {os.getcwd()}/.env as {effective_network.upper()}_"+task_coordinator_address+"_DINTaskAuditor_Contract_Address[/green]")
     else:
         print(f"[yellow]Warning:[/yellow] .env file not found. Address not saved.")
-        print(f"[yellow]Please manually add to .env:[/yellow] DINTaskAuditor_Contract_Address={dintaskauditor_contract_address}")
+        print(f"[yellow]Please manually add to .env:[/yellow] {effective_network.upper()}_"+task_coordinator_address+"_DINTaskAuditor_Contract_Address={dintaskauditor_contract_address}")
     
     # Set DINTaskAuditor in DINTaskCoordinator
     print(f"[cyan]Setting DINTaskAuditor in DINTaskCoordinator...[/cyan]")
@@ -313,12 +313,25 @@ def deposit_reward_in_dintask_auditor(
     if dintask_auditor:
         dintask_auditor_address = dintask_auditor
     else:
+        # Reuse env_config already loaded above (or reload if needed)
         env_config = dotenv_values(".env")
-        dintask_auditor_address = env_config.get("DINTaskAuditor_Contract_Address")
+    
+        # Step 1: Get Task Coordinator address
+        task_coordinator_key = f"{effective_network.upper()}_DINTaskCoordinator_Contract_Address"
+        task_coordinator_address = env_config.get(task_coordinator_key)
+
+        if not task_coordinator_address:
+            print("[red]Error:[/red] DINTaskCoordinator contract address not found.")
+            print(f"[yellow]Please ensure {task_coordinator_key} is set in {os.getcwd()}/.env[/yellow]")
+            raise typer.Exit(1)
+    
+        # Step 2: Use it to build the Auditor key
+        auditor_key = f"{effective_network.upper()}_{task_coordinator_address}_DINTaskAuditor_Contract_Address"
+        dintask_auditor_address = env_config.get(auditor_key)
         
         if not dintask_auditor_address:
             print("[red]Error:[/red] DINTaskAuditor contract address not found.")
-            print("[yellow]Please provide --dintask-auditor or ensure DINTaskAuditor_Contract_Address is set in .env[/yellow]")
+            print(f"[yellow]Please ensure {auditor_key} is set in {os.getcwd()}/.env[/yellow]")
             raise typer.Exit(1)
 
     print(f"[bold green]Depositing rewards on network:[/bold green] {effective_network}")
@@ -515,7 +528,7 @@ def deposit_reward_in_dintask_auditor(
 
 
     owner = DINTaskAuditor_contract.functions.owner().call()
-    console.print(f"[cyan]Owner:[/cyan] {owner}")
+    console.print(f"[cyan]Owner of DINTaskAuditor:[/cyan] {owner}")
     return
 
 
@@ -543,7 +556,7 @@ def add_slasher(
     env_config = dotenv_values(".env")
 
     if task_coordinator_flag and task_auditor_flag:
-        console.print("[red]Error:[/red] Cannot add both task coordinator and task auditor as slashers")
+        console.print("[red]Error:[/red] Cannot add both task coordinator and task auditor as slashers simultaneously")
         raise typer.Exit(1)
     elif not task_coordinator_flag and not task_auditor_flag:
         console.print("[red]Error:[/red] You must specify either --taskCoordinator or --taskAuditor")
@@ -552,10 +565,10 @@ def add_slasher(
 
     if not contract_address:
         
-        contract_address = env_config["DINTaskCoordinator_Contract_Address"]
+        contract_address = env_config[effective_network.upper() + "_DINTaskCoordinator_Contract_Address"]
 
         if not contract_address:
-            console.print("[red]Error:[/red] Contract address for DIN Task Coordinator not found in .env")
+            console.print(f"[bold red] X {effective_network.upper()}_DINTaskCoordinator_Contract_Address not found in {os.getcwd()}/.env file[/bold red]")
             raise typer.Exit(1)
 
 
@@ -615,34 +628,92 @@ def create_genesis(
     network: str = typer.Option(None, "--network", help="Network to use"),
     help: bool = typer.Option(False, "--help","-h", help="Show help"),
     default: bool = typer.Option(False, "--default", help="use default service"),
-    custom: bool = typer.Option(False, "--custom", help="use custom service"),
-
+    task_coordinator_address: str = typer.Option(None, "--taskCoordinator", help="Task coordinator address"),
 ):
+    effective_network = resolve_network(network)
+
+    if not task_coordinator_address:
+        task_coordinator_address = get_key(".env", effective_network.upper() + "_DINTaskCoordinator_Contract_Address")
+        if not task_coordinator_address:
+            console.print(f"[bold red] X {effective_network.upper()}_DINTaskCoordinator_Contract_Address not found in {os.getcwd()}/.env file[/bold red]")
+            raise typer.Exit(1)
 
     if help:
         console.print("[bold green]Usage:[/bold green]")
         console.print("  dincli model-owner model create-genesis --network <network>")
-        console.print("\nIf --default flag is not specified, uses getGenesisModelIpfs() from")
-        console.print(f"  {Path(os.getcwd()) / 'services' / 'modelowner.py'}")
-        console.print("The genesis model hash is set in .env under GENESIS_MODEL_IPFS_HASH")
+        console.print("\nIf --default flag is not specified, dincli will use getGenesisModelIpfs() from")
+        console.print(f"{Path(os.getcwd()) / 'tasks' / effective_network.lower() / task_coordinator_address / 'services' / 'modelowner.py'}")
+        console.print(f"The genesis model hash will be set in {os.getcwd()}/.env under {effective_network.upper() + "_" + task_coordinator_address}_GENESIS_MODEL_IPFS_HASH")
         raise typer.Exit(0)
 
-    effective_network = resolve_network(network)
+    
     if not default:
-        fn = load_custom_fn(
-            Path(os.getcwd()) / "services" / "modelowner.py",
-            "getGenesisModelIpfs",
+        ### Start - To Delete ###
+        tasks_dir = Path.cwd() / 'tasks' / effective_network.lower()
+        # Ensure tasks_dir exists
+        if not tasks_dir.exists():
+            raise FileNotFoundError(f"Tasks directory not found: {tasks_dir}")
+        # Find all subdirs that look like Ethereum addresses
+        eth_like_subdirs = [
+            p for p in tasks_dir.iterdir()
+            if p.is_dir() and is_ethereum_address(p.name)
+        ]
+
+        # Check if target already exists
+        target_folder = tasks_dir / task_coordinator_address
+
+        target_normalized = task_coordinator_address.lower()
+
+        # Check if target already exists (case-insensitively)
+        target_exists = any(
+            p.name.lower() == target_normalized for p in eth_like_subdirs
         )
-        model_hash = fn()
+
+        if not target_exists:
+            # Filter out the target itself just in case (shouldn't be needed, but safe)
+            candidates = [p for p in eth_like_subdirs if p.name.lower() != target_normalized]
+            if len(candidates) == 1:
+                # Exactly one folder exists → assume it's the one to rename
+                old_folder = candidates[0]
+                console.print(f"Auto-renaming task coordinator folder: {old_folder.name} → {task_coordinator_address}")
+                old_folder.rename(target_folder)
+            elif len(candidates) == 0:
+                raise FileNotFoundError(
+                    f"No existing Ethereum-like coordinator folder found in {tasks_dir}, "
+                    f"and target '{task_coordinator_address}' does not exist."
+                )
+            else:
+                raise RuntimeError(
+                    f"Multiple Ethereum-like coordinator folders found, but target is missing. "
+                    f"Cannot auto-rename. Candidates: {[p.name for p in candidates]}"
+                )
+        ### End - To Delete ###
+        # Construct the path
+
+        if get_manifest_key(effective_network, "getGenesisModelIpfs", None, task_coordinator_address)["type"] == "custom":
+            service_path_str = get_manifest_key(effective_network, "getGenesisModelIpfs", None, task_coordinator_address)["path"]
+            service_path = Path(service_path_str)
+
+        file_path = Path.cwd() / 'tasks' / effective_network.lower() / task_coordinator_address / service_path
+        if not file_path.exists():
+            raise FileNotFoundError(f"Required file does not exist: {file_path}")
+
+        console.print("[bold green]Creating genesis model...[/bold green]")
+        fn = load_custom_fn(
+            file_path,
+            "getGenesisModelIpfs"
+        )
+        base_path = Path(os.getcwd()) / "tasks" / effective_network.lower() / task_coordinator_address
+        model_hash = fn(base_path)
     else:
-        model_hash = getGenesisModelIpfs()
+        model_hash = getGenesisModelIpfs(base_path = Path(os.getcwd()) / "tasks" / effective_network.lower() / task_coordinator_address)
     
     
     console.print(f"[bold green]Genesis model created successfully![/bold green]")
     console.print(f"[cyan]Model hash:[/cyan] {model_hash}")
 
     # set in .env
-    set_key(".env", "GENESIS_MODEL_IPFS_HASH", model_hash)
+    set_key(".env", effective_network.upper() + "_" + task_coordinator_address + "_GENESIS_MODEL_IPFS_HASH", model_hash)
     
     return
 
@@ -655,29 +726,33 @@ def submit_genesis(
     default: bool = typer.Option(False, "--default", help="use default service"),
     help: bool = typer.Option(False, "--help","-h", help="Show help"),
 ):
+    effective_network = resolve_network(network)
 
+    if not task_coordinator_address:
+        task_coordinator_address = get_key(".env", effective_network.upper() + "_DINTaskCoordinator_Contract_Address")
+        if not task_coordinator_address:
+            console.print(f"[bold red] X {effective_network.upper()}_DINTaskCoordinator_Contract_Address not found in {os.getcwd()}/.env file[/bold red]")
+            raise typer.Exit(1)
+    
     if help:
         console.print("[bold green]Usage:[/bold green]")
         console.print("  dincli model-owner model submit-genesis --network <network>")
-        console.print("\nIf --default flag is not specified, uses submitGenesisModel() from")
-        console.print(f"  {Path(os.getcwd()) / 'services' / 'modelowner.py'}")
+        console.print("\nIf --default flag is not specified, dincli will use submitGenesisModel() from")
+        console.print(f"{Path(os.getcwd()) / 'tasks' / effective_network.lower() / task_coordinator_address / 'services' / 'modelowner.py'}")
         console.print("\n [yellow]Warning:[/yellow] the test dataset must be available at: ")
-        console.print(f"  {Path(os.getcwd()) / 'dataset' / 'test' / 'test_dataset.pt'}")
+        console.print(f"  {Path(os.getcwd()) / effective_network.lower() / task_coordinator_address / 'dataset' / 'test' / 'test_dataset.pt'}")
         console.print("\n [yellow]Warning:[/yellow] the genesis model must be available at: ")
-        console.print(f"  {Path(os.getcwd()) / 'models' / 'genesis_model.pth'}")
+        console.print(f"  {Path(os.getcwd()) / effective_network.lower() / task_coordinator_address / 'models' / 'genesis_model.pth'}")
+        console.print(f"\n [yellow]Warning:[/yellow] If --ipfs-hash is not specified, the genesis model IPFS hash will be read from {os.getcwd()}/.env under {effective_network.upper() + "_" + task_coordinator_address + "_GENESIS_MODEL_IPFS_HASH"}")
         raise typer.Exit(0)
 
-    effective_network = resolve_network(network)
 
     w3 = get_w3(effective_network)
     
     account = load_account()
     
     if not ipfs_hash:
-        ipfs_hash = get_key(".env", "GENESIS_MODEL_IPFS_HASH")
-    
-    if not task_coordinator_address:
-        task_coordinator_address = get_key(".env", "DINTaskCoordinator_Contract_Address")
+        ipfs_hash = get_key(".env", effective_network.upper() + "_" + task_coordinator_address + "_GENESIS_MODEL_IPFS_HASH")
     
     console.print(f"[bold green]Submitting genesis model to DIN Task Coordinator![/bold green]")
     console.print(f"[cyan]IPFS hash:[/cyan] {ipfs_hash}")
@@ -692,6 +767,22 @@ def submit_genesis(
     if not artifact_path.exists():
         console.print("[red]Error:[/red] ABI file not found")
         raise typer.Exit(1)
+
+    if score:
+        accuracy = score
+    else:
+        if not default:
+            tasks_dir = Path.cwd() / 'tasks' / effective_network.lower()
+            target_folder = tasks_dir / task_coordinator_address
+
+            if get_manifest_key(effective_network, "getscoreforGM", None, task_coordinator_address)["type"] == "custom":
+                service_path_str = get_manifest_key(effective_network, "getscoreforGM", None, task_coordinator_address)["path"]
+                service_path = target_folder / Path(service_path_str)
+                fn = load_custom_fn(service_path, "getscoreforGM")
+                accuracy = fn(0, ipfs_hash, target_folder)
+        else:
+            accuracy = getscoreforGM(0, ipfs_hash, base_path=Path(os.getcwd()) / "tasks" / effective_network.lower() / task_coordinator_address)
+
     
     deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator_address)
     
@@ -710,20 +801,9 @@ def submit_genesis(
     console.print("[green]✓ Genesis model submitted![/green]")
     
     
-    set_key(".env", "IS_GenesisModelCreated", "True")
+    set_key(".env", effective_network.upper() + "_" + task_coordinator_address + "_IS_GenesisModelCreated", "True")
 
-    if score:
-        accuracy = score
-    else:
-        if not default:
-            fn = load_custom_fn(
-                Path(os.getcwd()) / "services" / "modelowner.py",
-                "getscoreforGM",
-            )
-            accuracy = fn(0, ipfs_hash)
-        else:
-            accuracy = getscoreforGM(0, ipfs_hash)
-        
+         
     console.print("Genesis model accuracy:", accuracy)
     nonce = w3.eth.get_transaction_count(account.address)
         
@@ -745,19 +825,16 @@ def submit_genesis(
 def start(
     gi: Optional[int] = typer.Option(None, "--gi", help="Global iteration (optional)"),
     network: str = typer.Option(None, "--network", help="Network to use"),
-    task_coordinator_address: str = typer.Option(None, "--taskCoordinator", help="Task coordinator address"),
+    model_id: int = typer.Option(..., "--model-id", help="Model ID"),
+    threshold: Optional[int] = typer.Option(None, "--threshold", help="Threshold (optional)"),
+
 ):
 
     effective_network = resolve_network(network)
     w3 = get_w3(effective_network)
     account = load_account()
-    
-    
 
-    if not task_coordinator_address:
-        task_coordinator_address = get_key(".env", "DINTaskCoordinator_Contract_Address")
-    
-    
+    task_coordinator_address = get_manifest_key(effective_network, "DINTaskCoordinator_Contract", model_id)
     artifact_path = Path(__file__).parent / "abis" / "DINTaskCoordinator.json"
 
     # if artifact_path does not exist, raise error
@@ -779,18 +856,54 @@ def start(
     console.print(f"[cyan]From account:[/cyan] {account.address}")
 
 
-
-    
     if curr_GI == 0:
         gmcid = deployed_DINTaskCoordinatorContract.functions.genesisModelIpfsHash().call()
     else:
         batch_id, _, _, gmcid = deployed_DINTaskCoordinatorContract.functions.getTier2Batch(curr_GI,0).call()
     
-    accuracy = getscoreforGM(curr_GI, gmcid)
+
+    if get_manifest_key(effective_network, "getscoreforGM", model_id)["type"] == "custom":
+        model_base_path = Path(CACHE_DIR) / effective_network /  f"model_{model_id}" 
+        service_path_str = get_manifest_key(effective_network, "getscoreforGM", model_id)["path"]
+
+        model_service_path_str = get_manifest_key(effective_network, "ModelArchitecture", model_id)["path"]
+
+        custom_modelowner_service_path = model_base_path / Path(service_path_str)
+        
+        custom_model_service_path = model_base_path / Path(model_service_path_str)
+
+        if not custom_modelowner_service_path.exists():
+            retrieve_from_ipfs(get_manifest_key(effective_network,"getscoreforGM", model_id)["ipfs"], custom_modelowner_service_path)
+
+        if not custom_model_service_path.exists():
+            retrieve_from_ipfs(get_manifest_key(effective_network,"ModelArchitecture", model_id)["ipfs"], custom_model_service_path)
+
+        fn = load_custom_fn(
+            custom_modelowner_service_path,
+            "getscoreforGM")
+
+        if not (Path(model_base_path)/"models"/"genesis_model.pth").exists():
+            retrieve_from_ipfs(get_manifest_key(effective_network,"Genesis_Model_CID", model_id), str(Path(model_base_path)/"models"/"genesis_model.pth"))
+
+        if not (Path(model_base_path)/"dataset"/"test"/"test_dataset.pt").exists():
+            console.print("[red]Error:[/red] Test dataset not found at ", str(Path(model_base_path)/"dataset"/"test"/"test_dataset.pt"))
+            console.print("[yellow]Warning:[/yellow] please ensure the test dataset is present at ", str(Path(model_base_path)/"dataset"/"test"/"test_dataset.pt"))
+            raise typer.Exit(1) 
+
+
+        
+        accuracy = fn(curr_GI, gmcid, model_base_path)
+    else:
+        accuracy = getscoreforGM(curr_GI, gmcid, base_path= Path(CACHE_DIR) / effective_network /  f"model_{model_id}")
     console.print("Current GI:", curr_GI, "\nGM Accuracy:", accuracy)
 
-
-    tx = deployed_DINTaskCoordinatorContract.functions.startGI(curr_GI+1, int(accuracy-5)).build_transaction({
+    if threshold:
+        accuracy = int(accuracy - threshold)
+        console.print("Threshold:", threshold)
+    else:
+        accuracy = int(accuracy - 5)
+        console.print("Threshold not provided, using default value of 5")
+    tx = deployed_DINTaskCoordinatorContract.functions.startGI(curr_GI+1, accuracy).build_transaction({
         "from": account.address,
         "gas": 3000000,
         "nonce": w3.eth.get_transaction_count(account.address),
@@ -802,7 +915,7 @@ def start(
 
     receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
 
-    unset_key(".env", "ClientModelsCreatedF")
+    unset_key(".env", effective_network.lower()+ "_"+str(model_id)+"_ClientModelsCreatedF")
     
     console.print(f"[dim]Global iteration started tx:[/dim] {tx_hash.hex()}")
     console.print("passScore for GI ", curr_GI+1, " is ", int(accuracy))
@@ -812,15 +925,14 @@ def start(
 @reg_app.command()  
 def aggregators_open(
     network: str = typer.Option(None, "--network", help="Target network (local|sepolia|mainnet)"),
-    task_coordinator: str = typer.Option(None, "--taskCoordinator", help="DINTaskCoordinator contract address"),
+    model_id: int = typer.Option(..., "--model-id", help="Model ID"),
     gi: int = typer.Option(None, "--gi", help="Global iteration number"),
 ):
     effective_network = resolve_network(network)
     w3 = get_w3(effective_network)
     account = load_account()
     
-    if not task_coordinator:
-        task_coordinator = get_key(".env", "DINTaskCoordinator_Contract_Address")
+    task_coordinator_address = get_manifest_key(effective_network, "DINTaskCoordinator_Contract", model_id)
     
     artifact_path = Path(__file__).parent / "abis" / "DINTaskCoordinator.json"
     
@@ -829,7 +941,7 @@ def aggregators_open(
         console.print("[red]Error:[/red] ABI file not found")
         raise typer.Exit(1)
     
-    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator)
+    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator_address)
 
     curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
     if gi:
@@ -837,11 +949,11 @@ def aggregators_open(
             console.print("[red]Error:[/red] Invalid global iteration")
             raise typer.Exit(1)
     
-    console.print(f"[bold green]Opening aggregators registration for global iteration {curr_GI} on TaskCoordinator {task_coordinator}![/bold green]")
+    console.print(f"[bold green]Opening aggregators registration for global iteration {curr_GI} on TaskCoordinator {task_coordinator_address}![/bold green]")
     console.print(f"[cyan]Network:[/cyan] {effective_network}")
     console.print(f"[cyan]From account:[/cyan] {account.address}")
     
-    tx = deployed_DINTaskCoordinatorContract.functions.startDINvalidatorRegistration(curr_GI).build_transaction({
+    tx = deployed_DINTaskCoordinatorContract.functions.startDINaggregatorsRegistration(curr_GI).build_transaction({
         "from": account.address,
         "gas": 3000000,
         "nonce": w3.eth.get_transaction_count(account.address),
@@ -914,15 +1026,14 @@ def aggregators_close(
 @reg_app.command()
 def aggregators_close(
     network: str = typer.Option(None, "--network", help="Target network (local|sepolia|mainnet)"),
-    task_coordinator: str = typer.Option(None, "--taskCoordinator", help="DINTaskCoordinator contract address"),
+    model_id: int = typer.Option(..., "--model-id", help="Model ID"),
     gi: int = typer.Option(None, "--gi", help="Global iteration number"),
 ):      
     effective_network = resolve_network(network)
     w3 = get_w3(effective_network)
     account = load_account()
     
-    if not task_coordinator:
-        task_coordinator = get_key(".env", "DINTaskCoordinator_Contract_Address")
+    task_coordinator_address = get_manifest_key(effective_network, "DINTaskCoordinator_Contract", model_id)
     
     artifact_path = Path(__file__).parent / "abis" / "DINTaskCoordinator.json"
     
@@ -931,7 +1042,7 @@ def aggregators_close(
         console.print("[red]Error:[/red] ABI file not found")
         raise typer.Exit(1)
     
-    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator)
+    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator_address)
     
     curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
     if gi:
@@ -939,11 +1050,11 @@ def aggregators_close(
             console.print("[red]Error:[/red] Invalid global iteration")
             raise typer.Exit(1)
     
-    console.print(f"[bold green]Closing aggregators registration for global iteration {curr_GI} on TaskCoordinator {task_coordinator}![/bold green]")
+    console.print(f"[bold green]Closing aggregators registration for global iteration {curr_GI} on TaskCoordinator {task_coordinator_address}![/bold green]")
     console.print(f"[cyan]Network:[/cyan] {effective_network}")
     console.print(f"[cyan]From account:[/cyan] {account.address}")
     
-    tx = deployed_DINTaskCoordinatorContract.functions.closeDINvalidatorRegistration(curr_GI).build_transaction({
+    tx = deployed_DINTaskCoordinatorContract.functions.closeDINaggregatorsRegistration(curr_GI).build_transaction({
         "from": account.address,
         "gas": 3000000,
         "nonce": w3.eth.get_transaction_count(account.address),
@@ -959,21 +1070,20 @@ def aggregators_close(
     if receipt.status == 0:
         console.print("[red]Error:[/red] Aggregators registration closing failed")
         raise typer.Exit(1)
-    console.print(f"[dim]Aggregators closed registration tx:[/dim] {tx_hash.hex()}")
+    console.print(f"[dim]Aggregators registration closed tx:[/dim] {tx_hash.hex()}")
     console.print("[green]✓ Aggregators registration closed![/green]")
     
 @reg_app.command()
 def auditors_open(
     network: str = typer.Option(None, "--network", help="Target network (local|sepolia|mainnet)"),
-    task_coordinator: str = typer.Option(None, "--taskCoordinator", help="DINTaskCoordinator contract address"),
+    model_id: int = typer.Option(..., "--model-id", help="Model ID"),
     gi: int = typer.Option(None, "--gi", help="Global iteration number"),
 ):      
     effective_network = resolve_network(network)
     w3 = get_w3(effective_network)
     account = load_account()
     
-    if not task_coordinator:
-        task_coordinator = get_key(".env", "DINTaskCoordinator_Contract_Address")
+    task_coordinator_address = get_manifest_key(effective_network, "DINTaskCoordinator_Contract", model_id)
     
     artifact_path = Path(__file__).parent / "abis" / "DINTaskCoordinator.json"
     
@@ -982,7 +1092,7 @@ def auditors_open(
         console.print("[red]Error:[/red] ABI file not found")
         raise typer.Exit(1)
     
-    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator)
+    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator_address)
     
     curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
     if gi:
@@ -990,11 +1100,11 @@ def auditors_open(
             console.print("[red]Error:[/red] Invalid global iteration")
             raise typer.Exit(1)
     
-    console.print(f"[bold green]Opening auditors registration for global iteration {curr_GI} on TaskCoordinator {task_coordinator}![/bold green]")
+    console.print(f"[bold green]Opening auditors registration for global iteration {curr_GI} on TaskCoordinator {task_coordinator_address}![/bold green]")
     console.print(f"[cyan]Network:[/cyan] {effective_network}")
     console.print(f"[cyan]From account:[/cyan] {account.address}")
     
-    tx = deployed_DINTaskCoordinatorContract.functions.startDINauditorRegistration(curr_GI).build_transaction({
+    tx = deployed_DINTaskCoordinatorContract.functions.startDINauditorsRegistration(curr_GI).build_transaction({
         "from": account.address,
         "gas": 3000000,
         "nonce": w3.eth.get_transaction_count(account.address),
@@ -1013,22 +1123,18 @@ def auditors_open(
     console.print(f"[dim]Auditors opened registration tx:[/dim] {tx_hash.hex()}")
     console.print("[green]✓ Auditors registration opened![/green]")
 
-@gi_app.command(help="Show registered auditors")
+@gi_app.command("show-registered-auditors", help="Show registered auditors")
 def show_registered_auditors(
     network: str = typer.Option(None, "--network", help="Target network (local|sepolia|mainnet)"),
-    task_coordinator: str = typer.Option(None, "--task-coordinator", help="DINTaskCoordinator contract address"),
-    task_auditor: str = typer.Option(None, "--task-auditor", help="DINTaskAuditor contract address"),
+    model_id: int = typer.Option(..., "--model-id", help="Model ID"),
     gi: int = typer.Option(None, "--gi", help="Global iteration number"),
 ):    
     effective_network = resolve_network(network)
     w3 = get_w3(effective_network)
     account = load_account()
     
-    if not task_auditor:
-        task_auditor = get_key(".env", "DINTaskAuditor_Contract_Address")
-    
-    if not task_coordinator:
-        task_coordinator = get_key(".env", "DINTaskCoordinator_Contract_Address")
+    task_coordinator_address = get_manifest_key(effective_network, "DINTaskCoordinator_Contract", model_id)
+    task_auditor_address = get_manifest_key(effective_network, "DINTaskAuditor_Contract", model_id)
     
     artifact_path = Path(__file__).parent / "abis" / "DINTaskAuditor.json"
     
@@ -1037,7 +1143,7 @@ def show_registered_auditors(
         console.print("[red]Error:[/red] ABI file not found")
         raise typer.Exit(1)
     
-    deployed_DINTaskAuditorContract = get_contract_instance(str(artifact_path), effective_network, task_auditor)
+    deployed_DINTaskAuditorContract = get_contract_instance(str(artifact_path), effective_network, task_auditor_address)
 
     artifact_path = Path(__file__).parent / "abis" / "DINTaskCoordinator.json"
     
@@ -1046,7 +1152,7 @@ def show_registered_auditors(
         console.print("[red]Error:[/red] ABI file not found")
         raise typer.Exit(1)
     
-    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator)
+    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator_address)
     
     curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
     curr_GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
@@ -1055,12 +1161,12 @@ def show_registered_auditors(
             console.print("[red]Error:[/red] Invalid global iteration")
             raise typer.Exit(1)
 
-    if curr_GIstate < GIstatestrToIndex("DINauditorRegistrationStarted"):
-        console.print("[red]Error:[/red] No auditors registered yet as DINauditorRegistrationStarted has not been reached")
+    if curr_GIstate < GIstatestrToIndex("DINauditorsRegistrationStarted"):
+        console.print("[red]Error:[/red] No auditors registered yet as DINauditorsRegistrationStarted has not been reached")
         raise typer.Exit(1)
 
     
-    console.print(f"[bold green]Showing registered auditors for global iteration {curr_GI} on TaskCoordinator {task_coordinator} and TaskAuditor {task_auditor}![/bold green]")
+    console.print(f"[bold green]Showing registered auditors for global iteration {curr_GI} on TaskCoordinator {task_coordinator_address} and TaskAuditor {task_auditor_address}![/bold green]")
     console.print(f"[cyan]Network:[/cyan] {effective_network}")
     console.print(f"[cyan]From account:[/cyan] {account.address}")
 
@@ -1071,19 +1177,18 @@ def show_registered_auditors(
     console.print("[green]✓ Registered auditors shown![/green]")
 
 
-@gi_app.command(help="Show registered aggregators")
+@gi_app.command("show-registered-aggregators", help="Show registered aggregators")
 def show_registered_aggregators(
     network: str = typer.Option(None, "--network", help="Target network (local|sepolia|mainnet)"),
-    task_coordinator: str = typer.Option(None, "--taskCoordinator", help="DINTaskCoordinator contract address"),
+    model_id: int = typer.Option(..., "--model-id", help="Model ID"),
     gi: int = typer.Option(None, "--gi", help="Global iteration number"),
 ):
     effective_network = resolve_network(network)
     w3 = get_w3(effective_network)
     account = load_account()
     
-    if not task_coordinator:
-        task_coordinator = get_key(".env", "DINTaskCoordinator_Contract_Address")
-    
+    task_coordinator_address = get_manifest_key(effective_network, "DINTaskCoordinator_Contract", model_id)
+   
     artifact_path = Path(__file__).parent / "abis" / "DINTaskCoordinator.json"
     
     # if artifact_path does not exist, raise error
@@ -1091,7 +1196,7 @@ def show_registered_aggregators(
         console.print("[red]Error:[/red] ABI file not found")
         raise typer.Exit(1)
     
-    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator)
+    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator_address)
     
     curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
     if gi:
@@ -1101,15 +1206,15 @@ def show_registered_aggregators(
 
     curr_GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
 
-    if curr_GIstate < GIstatestrToIndex("DINvalidatorRegistrationStarted"):
-        console.print("[red]Error:[/red] No aggregators registered yet as DINvalidatorRegistrationStarted has not been reached")
+    if curr_GIstate < GIstatestrToIndex("DINaggregatorsRegistrationStarted"):
+        console.print("[red]Error:[/red] No aggregators registered yet as DINaggregatorsRegistrationStarted has not been reached")
         raise typer.Exit(1)
 
-    console.print(f"[bold green]Showing registered aggregators for global iteration {curr_GI} on TaskCoordinator {task_coordinator}![/bold green]")
+    console.print(f"[bold green]Showing registered aggregators for global iteration {curr_GI} on TaskCoordinator {task_coordinator_address}![/bold green]")
     console.print(f"[cyan]Network:[/cyan] {effective_network}")
     console.print(f"[cyan]From account:[/cyan] {account.address}")
     
-    registered_aggregators = deployed_DINTaskCoordinatorContract.functions.getDINtaskValidators(curr_GI).call()
+    registered_aggregators = deployed_DINTaskCoordinatorContract.functions.getDINtaskAggregators(curr_GI).call()
     console.print(str(len(registered_aggregators)) + " Registered Aggregators:", registered_aggregators)    
     console.print("[green]✓ Registered aggregators shown![/green]")
 
@@ -1151,18 +1256,17 @@ def show_state(
     console.print(f"[cyan]Global iteration state:[/cyan] {GIstateToStr(curr_GIstate)}")
     console.print("[green]✓ Global iteration state shown![/green]")
 
-@reg_app.command()
+@reg_app.command("auditors-close", help="Close auditors registration")
 def auditors_close(
     network: str = typer.Option(None, "--network", help="Target network (local|sepolia|mainnet)"),
-    task_coordinator: str = typer.Option(None, "--taskCoordinator", help="DINTaskCoordinator contract address"),
+    model_id: int = typer.Option(..., "--model-id", help="Model ID"),
     gi: int = typer.Option(None, "--gi", help="Global iteration number"),
 ):
     effective_network = resolve_network(network)
     w3 = get_w3(effective_network)
     account = load_account()
     
-    if not task_coordinator:
-        task_coordinator = get_key(".env", "DINTaskCoordinator_Contract_Address")
+    task_coordinator_address = get_manifest_key(effective_network, "DINTaskCoordinator_Contract", model_id)
     
     artifact_path = Path(__file__).parent / "abis" / "DINTaskCoordinator.json"
     
@@ -1171,7 +1275,7 @@ def auditors_close(
         console.print("[red]Error:[/red] ABI file not found")
         raise typer.Exit(1)
     
-    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator)
+    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator_address)
     
     curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
     if gi:
@@ -1179,11 +1283,11 @@ def auditors_close(
             console.print("[red]Error:[/red] Invalid global iteration")
             raise typer.Exit(1)
     
-    console.print(f"[bold green]Closing auditors registration for global iteration {curr_GI} on TaskCoordinator {task_coordinator}![/bold green]")
+    console.print(f"[bold green]Closing auditors registration for global iteration {curr_GI} on TaskCoordinator {task_coordinator_address}![/bold green]")
     console.print(f"[cyan]Network:[/cyan] {effective_network}")
     console.print(f"[cyan]From account:[/cyan] {account.address}")
     
-    tx = deployed_DINTaskCoordinatorContract.functions.closeDINauditorRegistration(curr_GI).build_transaction({
+    tx = deployed_DINTaskCoordinatorContract.functions.closeDINauditorsRegistration(curr_GI).build_transaction({
         "from": account.address,
         "gas": 3000000,
         "nonce": w3.eth.get_transaction_count(account.address),
@@ -1205,7 +1309,7 @@ def auditors_close(
 @lms_app.command()    
 def open(
     network: str = typer.Option(None, "--network", help="Target network (local|sepolia|mainnet)"),
-    task_coordinator: str = typer.Option(None, "--taskCoordinator", help="DINTaskCoordinator contract address"),
+    model_id: int = typer.Option(..., "--model-id", help="Model ID"),
     gi: int = typer.Option(None, "--gi", help="Global iteration number"),
 ):
 
@@ -1213,8 +1317,7 @@ def open(
     w3 = get_w3(effective_network)
     account = load_account()
     
-    if not task_coordinator:
-        task_coordinator = get_key(".env", "DINTaskCoordinator_Contract_Address")
+    task_coordinator_address = get_manifest_key(effective_network, "DINTaskCoordinator_Contract", model_id)
     
     artifact_path = Path(__file__).parent / "abis" / "DINTaskCoordinator.json"
     
@@ -1223,7 +1326,7 @@ def open(
         console.print("[red]Error:[/red] ABI file not found")
         raise typer.Exit(1)
     
-    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator)
+    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator_address)
     
     curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
     if gi:
@@ -1231,7 +1334,7 @@ def open(
             console.print("[red]Error:[/red] Invalid global iteration")
             raise typer.Exit(1)
     
-    console.print(f"[bold green]Opening local model submissions for global iteration {curr_GI} on TaskCoordinator {task_coordinator}![/bold green]")
+    console.print(f"[bold green]Opening local model submissions for global iteration {curr_GI} on TaskCoordinator {task_coordinator_address}![/bold green]")
     console.print(f"[cyan]Network:[/cyan] {effective_network}")
     console.print(f"[cyan]From account:[/cyan] {account.address}")
     
@@ -1257,16 +1360,14 @@ def open(
 @lms_app.command()
 def show_models(
     network: str = typer.Option(None, "--network", help="Target network (local|sepolia|mainnet)"),
-    task_coordinator: str = typer.Option(None, "--task-coordinator", help="Task coordinator address"),
-    task_auditor: str = typer.Option(None, "--task-auditor", help="Task auditor address"),
+    model_id: int = typer.Option(..., "--model-id", help="Model ID"),
     gi: int = typer.Option(None, "--gi", help="Global iteration to use"),
 ):
     effective_network = resolve_network(network)
     w3 = get_w3(effective_network)
     account = load_account()
     
-    if not task_coordinator:
-        task_coordinator = get_key(".env", "DINTaskCoordinator_Contract_Address")
+    task_coordinator_address = get_manifest_key(effective_network, "DINTaskCoordinator_Contract", model_id)
     
     artifact_path = Path(__file__).parent / "abis" / "DINTaskCoordinator.json"
     
@@ -1275,16 +1376,18 @@ def show_models(
         console.print("[red]Error:[/red] ABI file not found")
         raise typer.Exit(1)
     
-    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator)
+    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator_address)
     
     curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
-    if gi:
-        if gi!=curr_GI:
-            console.print("[red]Error:[/red] Invalid global iteration")
+    if not gi:
+        ref_gi = curr_GI
+    else:
+        if gi > curr_GI:
+            console.print(f"[red]Error:[/red] Invalid global iteration {gi} given in command: gi > curr_GI ({curr_GI})")
             raise typer.Exit(1)
+        ref_gi = gi
 
-    if not task_auditor:
-        task_auditor = get_key(".env", "DINTaskAuditor_Contract_Address")
+    task_auditor_address = get_manifest_key(effective_network, "DINTaskAuditor_Contract", model_id)
     
     artifact_path = Path(__file__).parent / "abis" / "DINTaskAuditor.json"
     
@@ -1293,9 +1396,9 @@ def show_models(
         console.print("[red]Error:[/red] ABI file not found")
         raise typer.Exit(1)
     
-    deployed_DINTaskAuditorContract = get_contract_instance(str(artifact_path), effective_network, task_auditor)
+    deployed_DINTaskAuditorContract = get_contract_instance(str(artifact_path), effective_network, task_auditor_address)
     
-    console.print(f"[bold green]Showing local model submissions for global iteration {curr_GI} on TaskCoordinator {task_coordinator} and TaskAuditor {task_auditor}![/bold green]")
+    console.print(f"[bold green]Showing local model submissions for global iteration {ref_gi} on TaskCoordinator {task_coordinator_address} and TaskAuditor {task_auditor_address}![/bold green]")
     console.print(f"[cyan]Network:[/cyan] {effective_network}")
     console.print(f"[cyan]From account:[/cyan] {account.address}")
 
@@ -1304,8 +1407,8 @@ def show_models(
 
     GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
 
-    if GIstate >= GIstatestrToIndex("LMSstarted"):
-        lm_submissions = deployed_DINTaskAuditorContract.functions.getClientModels(curr_GI).call()
+    if (ref_gi == curr_GI and GIstate >= GIstatestrToIndex("LMSstarted")) or (ref_gi < curr_GI):
+        lm_submissions = deployed_DINTaskAuditorContract.functions.getClientModels(ref_gi).call()
         if len(lm_submissions) == 0:
             console.print("[red]Error:[/red] No local model submissions found")
             raise typer.Exit(1)
@@ -1319,21 +1422,23 @@ def show_models(
             console.print(f"[green]✓ Client {ClientAddresses[i]} submitted model {client_model_ipfs_hash}![/green]")
 
         console.print(f"[bold green]✓ Local model submissions shown![/bold green]")
+    else:
+        console.print(f"[red]Error:[/red] Invalid global iteration {ref_gi} given in command: gi > curr_GI ({curr_GI})")
+        raise typer.Exit(1)
         
 
 @lms_app.command()    
 def close(
     network: str = typer.Option(None, "--network", help="Target network (local|sepolia|mainnet)"),
-    task_coordinator: str = typer.Option(None, "--taskCoordinator", help="DINTaskCoordinator contract address"),
+    model_id: int = typer.Option(..., "--model-id", help="Model ID"),
     gi: int = typer.Option(None, "--gi", help="Global iteration number"),
 ):
 
     effective_network = resolve_network(network)
     w3 = get_w3(effective_network)
     account = load_account()
-    
-    if not task_coordinator:
-        task_coordinator = get_key(".env", "DINTaskCoordinator_Contract_Address")
+
+    task_coordinator_address = get_manifest_key(effective_network, "DINTaskCoordinator_Contract", model_id)
     
     artifact_path = Path(__file__).parent / "abis" / "DINTaskCoordinator.json"
     
@@ -1342,7 +1447,7 @@ def close(
         console.print("[red]Error:[/red] ABI file not found")
         raise typer.Exit(1)
     
-    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator)
+    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator_address)
     
     curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
 
@@ -1353,12 +1458,14 @@ def close(
             console.print("[red]Error:[/red] Invalid global iteration")
             raise typer.Exit(1)
 
+    console.print(f"[bold green]Closing local model submissions for global iteration {curr_GI} on TaskCoordinator {task_coordinator_address}![/bold green]")
+
     if curr_GI < 1 or GIstate != GIstatestrToIndex("LMSstarted"):
-        console.print("[red]Error:[/red] Can not close LM submissions at this time")
+        console.print(f"[red]Error:[/red] Can not close LM submissions at this time. GIstate is {GIstateToStr(GIstate)} and curr_GI is {curr_GI}")
         raise typer.Exit(1)
 
     
-    console.print(f"[bold green]Closing local model submissions for global iteration {curr_GI} on TaskCoordinator {task_coordinator}![/bold green]")
+   
     console.print(f"[cyan]Network:[/cyan] {effective_network}")
     console.print(f"[cyan]From account:[/cyan] {account.address}")
     
@@ -1384,15 +1491,14 @@ def close(
 @auditor_batches_app.command()
 def create(
     network: str = typer.Option(None, "--network", help="Target network (local|sepolia|mainnet)"),
-    task_coordinator: str = typer.Option(None, "--taskCoordinator", help="DINTaskCoordinator contract address"),
+    model_id: int = typer.Option(..., "--model-id", help="Model ID"),
     gi: int = typer.Option(None, "--gi", help="Global iteration number"),
 ):
     effective_network = resolve_network(network)
     w3 = get_w3(effective_network)
     account = load_account()
     
-    if not task_coordinator:
-        task_coordinator = get_key(".env", "DINTaskCoordinator_Contract_Address")
+    task_coordinator_address = get_manifest_key(effective_network, "DINTaskCoordinator_Contract", model_id)
     
     artifact_path = Path(__file__).parent / "abis" / "DINTaskCoordinator.json"
     
@@ -1401,7 +1507,7 @@ def create(
         console.print("[red]Error:[/red] ABI file not found")
         raise typer.Exit(1)
     
-    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator)
+    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator_address)
     
     curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
 
@@ -1416,7 +1522,7 @@ def create(
         console.print("[red]Error:[/red] Can not create auditor batches at this time")
         raise typer.Exit(1)
     
-    console.print(f"[bold green]Creating auditor batches for global iteration {curr_GI} on TaskCoordinator {task_coordinator}![/bold green]")
+    console.print(f"[bold green]Creating auditor batches for global iteration {curr_GI} on TaskCoordinator {task_coordinator_address}![/bold green]")
     console.print(f"[cyan]Network:[/cyan] {effective_network}")
     console.print(f"[cyan]From account:[/cyan] {account.address}")
     
@@ -1442,18 +1548,16 @@ def create(
 @auditor_batches_app.command()
 def show(
     network: str = typer.Option(None, "--network", help="Target network (local|sepolia|mainnet)"),
-    task_coordinator: str = typer.Option(None, "--taskCoordinator", help="DINTaskCoordinator contract address"),
-    task_auditor: str = typer.Option(None, "--taskAuditor", help="DINTaskAuditor contract address"),
+    model_id: int = typer.Option(..., "--model-id", help="Model ID"),
     gi: int = typer.Option(None, "--gi", help="Global iteration number"),
 ):
-    console.print(f"[bold green]Showing auditor batches for global iteration {gi} on TaskCoordinator {task_coordinator}![/bold green]")
+    
 
     effective_network = resolve_network(network)
     w3 = get_w3(effective_network)
     account = load_account()
     
-    if not task_coordinator:
-        task_coordinator = get_key(".env", "DINTaskCoordinator_Contract_Address")
+    task_coordinator_address = get_manifest_key(effective_network, "DINTaskCoordinator_Contract", model_id)
     
     artifact_path = Path(__file__).parent / "abis" / "DINTaskCoordinator.json"
     
@@ -1462,10 +1566,9 @@ def show(
         console.print("[red]Error:[/red] ABI file not found")
         raise typer.Exit(1)
     
-    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator)
+    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator_address)
 
-    if not task_auditor:
-        task_auditor = get_key(".env", "DINTaskAuditor_Contract_Address")
+    task_auditor_address = get_manifest_key(effective_network, "DINTaskAuditor_Contract", model_id)
     
     artifact_path = Path(__file__).parent / "abis" / "DINTaskAuditor.json"
     
@@ -1474,77 +1577,82 @@ def show(
         console.print("[red]Error:[/red] ABI file not found")
         raise typer.Exit(1)
     
-    deployed_DINTaskAuditorContract = get_contract_instance(str(artifact_path), effective_network, task_auditor)
+    deployed_DINTaskAuditorContract = get_contract_instance(str(artifact_path), effective_network, task_auditor_address)
     
     curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
 
     GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
 
-    if gi:
-        if gi!=curr_GI:
-            console.print("[red]Error:[/red] Invalid global iteration")
+    if not gi:
+        ref_gi = curr_GI
+    else:
+        if gi > curr_GI:
+            console.print(f"[red]Error:[/red] Invalid global iteration {gi} given in command: gi > curr_GI ({curr_GI})")
             raise typer.Exit(1)
+        ref_gi = gi
 
-    if curr_GI < 1 or GIstate < GIstatestrToIndex("AuditorsBatchesCreated"):
+
+    if (ref_gi == curr_GI and GIstate >= GIstatestrToIndex("AuditorsBatchesCreated")) or (ref_gi < curr_GI):
+
+        console.print(f"[bold green]Showing auditor batches for global iteration {ref_gi} on TaskCoordinator {task_coordinator_address}![/bold green]")
+        console.print(f"[cyan]Network:[/cyan] {effective_network}")
+        console.print(f"[cyan]From account:[/cyan] {account.address}")
+
+        audtor_batch_count = deployed_DINTaskAuditorContract.functions.AuditorsBatchCount(ref_gi).call()
+
+        console.print(f"[bold green]Auditor batches count:[/bold green] {audtor_batch_count}")
+
+        raw_audit_batches = []
+        processed_audit_batches = []
+    
+        for i in range(audtor_batch_count):
+            raw_audit_batches.append(deployed_DINTaskAuditorContract.functions.getAuditorsBatch(ref_gi, i).call())
+
+        for batch in raw_audit_batches:
+            batch_id, auditors, model_indexes, test_cid = batch
+            processed_audit_batches.append({"batch_id": batch_id, "auditors": auditors, "model_indexes": model_indexes, "test_cid": test_cid or "None"})
+
+    
+
+        # After building `processed_audit_batches`:
+        if not processed_audit_batches:
+            console.print("[yellow]No auditor batches found.[/yellow]")
+        else:
+            table = Table(title=f"Auditor Batches for GI {curr_GI}", show_header=True, header_style="bold magenta")
+            table.add_column("Batch ID", style="dim")
+            table.add_column("Auditors", overflow="fold")
+            table.add_column("Model Indexes", overflow="fold")
+            table.add_column("Test CID")
+
+            for batch in processed_audit_batches:
+                table.add_row(
+                    str(batch["batch_id"]),
+                    ", ".join(batch["auditors"]) if batch["auditors"] else "—",
+                    ", ".join(map(str, batch["model_indexes"])) if batch["model_indexes"] else "—",
+                    batch["test_cid"] if batch["test_cid"] != "None" else "—"
+                )
+    
+            console.print(table)
+
+            console.print("[green]✓ Auditor batches shown![/green]")
+
+    else:
         console.print("[red]Error:[/red] Can not show auditor batches at this time as GIstate is ",GIstateToStr(GIstate))
         raise typer.Exit(1)
 
-    console.print(f"[bold green]Showing auditor batches for global iteration {gi} on TaskCoordinator {task_coordinator}![/bold green]")
-    console.print(f"[cyan]Network:[/cyan] {effective_network}")
-    console.print(f"[cyan]From account:[/cyan] {account.address}")
-
-    audtor_batch_count = deployed_DINTaskAuditorContract.functions.AuditorsBatchCount(curr_GI).call()
-
-    console.print(f"[bold green]Auditor batches count:[/bold green] {audtor_batch_count}")
-
-    raw_audit_batches = []
-    processed_audit_batches = []
-    
-    for i in range(audtor_batch_count):
-        raw_audit_batches.append(deployed_DINTaskAuditorContract.functions.getAuditorsBatch(curr_GI, i).call())
-
-    for batch in raw_audit_batches:
-        batch_id, auditors, model_indexes, test_cid = batch
-        processed_audit_batches.append({"batch_id": batch_id, "auditors": auditors, "model_indexes": model_indexes, "test_cid": test_cid or "None"})
-
-    
-
-    # After building `processed_audit_batches`:
-    if not processed_audit_batches:
-        console.print("[yellow]No auditor batches found.[/yellow]")
-    else:
-        table = Table(title=f"Auditor Batches for GI {curr_GI}", show_header=True, header_style="bold magenta")
-        table.add_column("Batch ID", style="dim")
-        table.add_column("Auditors", overflow="fold")
-        table.add_column("Model Indexes", overflow="fold")
-        table.add_column("Test CID")
-
-    for batch in processed_audit_batches:
-        table.add_row(
-            str(batch["batch_id"]),
-            ", ".join(batch["auditors"]) if batch["auditors"] else "—",
-            ", ".join(map(str, batch["model_indexes"])) if batch["model_indexes"] else "—",
-            batch["test_cid"] if batch["test_cid"] != "None" else "—"
-        )
-    
-    console.print(table)
-
-    console.print("[green]✓ Auditor batches shown![/green]")
-
-@auditor_batches_app.command()
+@auditor_batches_app.command("create-testdataset")
 def create_testdataset(
     network: str = typer.Option(None, "--network", help="Target network (local|sepolia|mainnet)"),
-    task_coordinator: str = typer.Option(None, "--taskCoordinator", help="DINTaskCoordinator contract address"),
-    task_auditor: str = typer.Option(None, "--taskAuditor", help="DINTaskAuditor contract address"),
+    model_id: int = typer.Option(..., "--model-id", help="Model ID"),
     gi: int = typer.Option(None, "--gi", help="Global iteration number"),
     submit: bool = typer.Option(False, "--submit", help="Submit test dataset to TaskCoordinator"),
+    test_data_path: str = typer.Option(None, "--test-data-path", help="Path to test dataset"),
 ):
     effective_network = resolve_network(network)
     w3 = get_w3(effective_network)
     account = load_account()
     
-    if not task_coordinator:
-        task_coordinator = get_key(".env", "DINTaskCoordinator_Contract_Address")
+    task_coordinator_address = get_manifest_key(effective_network, "DINTaskCoordinator_Contract", model_id)
     
     artifact_path = Path(__file__).parent / "abis" / "DINTaskCoordinator.json"
     
@@ -1553,10 +1661,9 @@ def create_testdataset(
         console.print("[red]Error:[/red] ABI file not found")
         raise typer.Exit(1)
     
-    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator)
+    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator_address)
 
-    if not task_auditor:
-        task_auditor = get_key(".env", "DINTaskAuditor_Contract_Address")
+    task_auditor_address = get_manifest_key(effective_network, "DINTaskAuditor_Contract", model_id)
     
     artifact_path = Path(__file__).parent / "abis" / "DINTaskAuditor.json"
     
@@ -1565,7 +1672,7 @@ def create_testdataset(
         console.print("[red]Error:[/red] ABI file not found")
         raise typer.Exit(1)
     
-    deployed_DINTaskAuditorContract = get_contract_instance(str(artifact_path), effective_network, task_auditor)
+    deployed_DINTaskAuditorContract = get_contract_instance(str(artifact_path), effective_network, task_auditor_address)
     
     curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
 
@@ -1573,18 +1680,30 @@ def create_testdataset(
 
     if gi:
         if gi!=curr_GI:
-            console.print("[red]Error:[/red] Invalid global iteration")
+            console.print(f"[red]Error:[/red] Invalid global iteration given in command: gi ({gi}) != curr_GI ({curr_GI})")
             raise typer.Exit(1)
 
     if curr_GI < 1 or GIstate != GIstatestrToIndex("AuditorsBatchesCreated"):
         console.print("[red]Error:[/red] Can not create test dataset at this time as GIstate is ",GIstateToStr(GIstate))
         raise typer.Exit(1)
 
-    console.print(f"[bold green]Creating test dataset for global iteration {curr_GI} on TaskCoordinator {task_coordinator}![/bold green]")
+    console.print(f"[bold green]Creating test dataset for global iteration {curr_GI} on TaskCoordinator {task_coordinator_address}![/bold green]")
 
     audtor_batch_count = deployed_DINTaskAuditorContract.functions.AuditorsBatchCount(curr_GI).call()
 
-    audit_testDataCIDs = create_audit_testDataCIDs(audtor_batch_count, curr_GI)
+    model_base_path = Path(CACHE_DIR) / effective_network /  f"model_{model_id}"
+
+
+    if get_manifest_key(effective_network, "create_audit_testDataCIDs", model_id)["type"] == "custom":
+        service_path_str = get_manifest_key(effective_network, "create_audit_testDataCIDs", model_id)["path"]
+        custom_modelowner_service_path = model_base_path / Path(service_path_str)
+        if not custom_modelowner_service_path.exists():
+            retrieve_from_ipfs(get_manifest_key(effective_network,"create_audit_testDataCIDs", model_id)["ipfs"], custom_modelowner_service_path)
+
+        fn = load_custom_fn(custom_modelowner_service_path, "create_audit_testDataCIDs")
+        audit_testDataCIDs = fn(audtor_batch_count, curr_GI, str(model_base_path), test_data_path)
+    else:
+        audit_testDataCIDs = create_audit_testDataCIDs(audtor_batch_count, curr_GI)
     
     #audit_testDataCIDs = ['QmYHc4Y6pmMKFohYDJXkFCCrLAQBUhwGuD6ebGZUxi34ea', 'QmSvTuP4XmcNnaYAqYkv6ewUKU7v2PCAnnLB9DqE7MTrAg', 'QmSdiTciKYBTxHKntjY3Pko8szD5D1nXVLU2mVWrsZhWdE', 'QmcLCGEz9FDHti6c2PPUqAh8rzGpQSwFAZi4QifcYkQB49', 'QmRZydYdpcHTpSSNy7MsX2K29KuUwEsoRxDkT9NEHqu6CQ', 'QmfBeoeqxb3SecGj4qUWcYYZ5AtCsUPyBn8deUj4RQofxw']
 
@@ -1594,7 +1713,7 @@ def create_testdataset(
 
     if submit:
 
-        console.print(f"[bold green]Assigning test dataset for global iteration {curr_GI} on TaskAuditor {task_auditor}![/bold green]")
+        console.print(f"[bold green]Assigning test dataset for global iteration {curr_GI} on TaskAuditor {task_auditor_address}![/bold green]")
 
         for batch_id in range(audtor_batch_count):
             tx = deployed_DINTaskAuditorContract.functions.assignAuditTestDataset(curr_GI, batch_id, audit_testDataCIDs[batch_id]).build_transaction({
@@ -1636,7 +1755,7 @@ def create_testdataset(
 @lms_evaluation_app.command()
 def start(
     network: str = typer.Option(None, "--network", help="Target network (local|sepolia|mainnet)"),
-    task_coordinator: str = typer.Option(None, "--taskCoordinator", help="DINTaskCoordinator contract address"),
+    model_id: str = typer.Option(None, "--model-id", help="Model ID"),
     gi: int = typer.Option(None, "--gi", help="Global iteration number"),
 ):
 
@@ -1644,8 +1763,7 @@ def start(
     w3 = get_w3(effective_network)
     account = load_account()
     
-    if not task_coordinator:
-        task_coordinator = get_key(".env", "DINTaskCoordinator_Contract_Address")
+    task_coordinator_address = get_manifest_key(effective_network, "DINTaskCoordinator_Contract", model_id)
     
     artifact_path = Path(__file__).parent / "abis" / "DINTaskCoordinator.json"
     
@@ -1654,7 +1772,7 @@ def start(
         console.print("[red]Error:[/red] ABI file not found")
         raise typer.Exit(1)
     
-    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator)
+    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator_address)
 
     curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
     
@@ -1669,7 +1787,7 @@ def start(
         console.print("[red]Error:[/red] Can not start LMS evaluation at this time as GIstate is ",GIstateToStr(GIstate))
         raise typer.Exit(1)
     
-    console.print(f"[bold green]Starting LMS evaluation for global iteration {curr_GI}![/bold green]")
+    console.print(f"[bold green]Starting LMS evaluation for global iteration {curr_GI} on TaskCoordinator {task_coordinator_address}![/bold green]")
 
     tx = deployed_DINTaskCoordinatorContract.functions.startLMsubmissionsEvaluation(curr_GI).build_transaction({
         "from": account.address,
@@ -1685,7 +1803,7 @@ def start(
     if receipt.status == 0:
         console.print("[red]Error:[/red] Failed to start LMS evaluation for global iteration", curr_GI)
         raise typer.Exit(1)
-    console.print(f"[green]✓ LMS evaluation started for global iteration {curr_GI}![/green]")
+    console.print(f"[green]✓ LMS evaluation started for global iteration {curr_GI} on TaskCoordinator {task_coordinator_address}![/green]")
     
 
 @lms_evaluation_app.command()
@@ -2261,8 +2379,8 @@ def end(
             console.print(f"[red]Error:[/red] invalid GI, current GI is {curr_GI}")
             raise typer.Exit(1)
 
-    if GIstate < GIstatestrToIndex("ValidatorSlashed"):
-        console.print(f"[red]Error:[/red] GI state is {GIstateToStr(GIstate)}. GI state ValidatorSlashed not passed yet.")
+    if GIstate < GIstatestrToIndex("AggregatorsSlashed"):
+        console.print(f"[red]Error:[/red] GI state is {GIstateToStr(GIstate)}. GI state AggregatorsSlashed not passed yet.")
         raise typer.Exit(1)
     
     console.print(f"[bold green]Ending GI {curr_GI}...[/bold green]")   
@@ -2295,43 +2413,43 @@ def end(
 @lms_evaluation_app.command("show")
 def show(
     network: str = typer.Option(None, "--network", help="Network to use"),
-    auditor: bool = typer.Option(False, "--auditor", help="Show auditor evaluations"),
+    auditors: bool = typer.Option(False, "--auditors", help="Show auditor evaluations"),
     gi: int = typer.Option(None, "--gi", help="Global iteration number"),
-    task_coordinator: str = typer.Option(None, "--taskCoordinator", help="DINTaskCoordinator contract address"),
-    task_auditor: str = typer.Option(None, "--taskAuditor", help="DINTaskAuditor contract address"),
+    model_id: str = typer.Option(None, "--model-id", help="Model ID"),
 ):
     effective_network = resolve_network(network)
     w3 = get_w3(effective_network)
     account = load_account()
 
-    if not task_coordinator:
-        task_coordinator = get_key(".env", "DINTaskCoordinator_Contract_Address")
+    task_coordinator_address = get_manifest_key(effective_network, "DINTaskCoordinator_Contract", model_id)
     
     artifact_path = Path(__file__).parent / "abis" / "DINTaskCoordinator.json"
-    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator)
+    deployed_DINTaskCoordinatorContract = get_contract_instance(str(artifact_path), effective_network, task_coordinator_address)
     
     curr_GI = deployed_DINTaskCoordinatorContract.functions.GI().call()
 
     GIstate = deployed_DINTaskCoordinatorContract.functions.GIstate().call()
 
-    if not task_auditor:
-        task_auditor = get_key(".env", "DINTaskAuditor_Contract_Address")
-
+    task_auditor_address = get_manifest_key(effective_network, "DINTaskAuditor_Contract", model_id)
+    
     artifact_path = Path(__file__).parent / "abis" / "DINTaskAuditor.json"
-    deployed_DINTaskAuditorContract = get_contract_instance(str(artifact_path), effective_network, task_auditor)
+    deployed_DINTaskAuditorContract = get_contract_instance(str(artifact_path), effective_network, task_auditor_address)
 
-    if gi:
-        if curr_GI != gi:
-            console.print(f"[red]Error:[/red] invalid GI, current GI is {curr_GI}")
+    if not gi:
+        ref_gi = curr_GI
+    else:
+        if gi > curr_GI:
+            console.print(f"[red]Error:[/red] Invalid global iteration {gi} given in command: gi > curr_GI ({curr_GI})")
             raise typer.Exit(1)
+        ref_gi = gi
 
-    if GIstate < GIstatestrToIndex("AuditorsBatchesCreated"):
+
+    if (ref_gi == curr_GI and GIstate >= GIstatestrToIndex("AuditorsBatchesCreated")) or (ref_gi < curr_GI):
+        console.print(f"[bold green]Showing LMS Evaluation for GI {curr_GI} on TaskCoordinator {task_coordinator_address} and TaskAuditor {task_auditor_address}...[/bold green]")   
+    else:
         console.print(f"[red]Error:[/red] GI state is {GIstateToStr(GIstate)}. GI state AuditorsBatchesCreated not passed yet.")
         raise typer.Exit(1)
     
-    console.print(f"[bold green]Showing LMS Evaluation for GI {curr_GI}...[/bold green]")   
-    console.print("DIN task Auditor address: ", task_auditor)
-    console.print("DIN task Coordinator address: ", task_coordinator)
 
     audtor_batch_count = deployed_DINTaskAuditorContract.functions.AuditorsBatchCount(curr_GI).call()
 
@@ -2347,22 +2465,21 @@ def show(
 
     assigned_lm_submissions = {}
 
-    if auditor:
+    if auditors:
         all_auditors = set()
 
-    for i in range(audtor_batch_count):
-        raw_audit_batches.append(deployed_DINTaskAuditorContract.functions.getAuditorsBatch(curr_GI, i).call())
-    
-    for batch_data in raw_audit_batches:
-        batch_id, auditors, model_indexes, test_cid = batch_data
+        for i in range(audtor_batch_count):
+            raw_audit_batches.append(deployed_DINTaskAuditorContract.functions.getAuditorsBatch(curr_GI, i).call())
+        
+        for batch_data in raw_audit_batches:
+            batch_id, auditors, model_indexes, test_cid = batch_data
 
-        for a in auditors:
-            auditor_batch[a]=auditor_batch.get(a, {"raw_batches": []})
-            auditor_batch[a]["raw_batches"].append({"batch_id": batch_id, "model_indexes": model_indexes, "test_cid": test_cid})
+            for a in auditors:
+                auditor_batch[a]=auditor_batch.get(a, {"raw_batches": []})
+                auditor_batch[a]["raw_batches"].append({"batch_id": batch_id, "model_indexes": model_indexes, "test_cid": test_cid})
 
-        all_auditors.update(auditors)
+            all_auditors.update(auditors)
 
-    if auditor:
         for a in all_auditors:
             auditor_batch[a]["batch_count"] = len(auditor_batch[a]["raw_batches"])
 
@@ -2380,7 +2497,7 @@ def show(
 
         lm_submissions[idx] = {"model_index": idx, "client": client, "model_cid": model_cid, "submitted_at": submitted_at, "eligible": eligible, "evaluated": evaluated, "approved": approved, "final_avg": final_avg}
 
-        if auditor:
+        if auditors:
 
             for auditor in all_auditors:
                 assigned_lm_submissions[auditor] = assigned_lm_submissions.get(auditor, [])
@@ -2442,7 +2559,7 @@ def show(
         )
     console.print(lm_submissions_table)
 
-    if auditor:
+    if auditors:
 
         for auditor in all_auditors:
             
@@ -2473,37 +2590,3 @@ def show(
             console.print(assigned_lm_submissions_table)
     
             
-
-
-        
-
-
-
-
-
-
-    
-
-
-
-
-
-
-
-
-
-
-
-
-    
-
-
-
-
-
-        
-
-
-    
-    
-    

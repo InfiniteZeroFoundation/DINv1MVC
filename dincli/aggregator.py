@@ -5,7 +5,7 @@ from typing import Optional
 from rich.console import Console
 from pathlib import Path
 from dotenv import dotenv_values, set_key, get_key, unset_key
-from dincli.utils import resolve_network, get_w3, load_account, load_din_info, load_usdt_config, GIstateToStr, GIstatestrToIndex
+from dincli.utils import resolve_network, get_w3, load_account, load_din_info, load_usdt_config, GIstateToStr, GIstatestrToIndex, cache_manifest, get_manifest_key
 from dincli.contract_utils import get_contract_instance
 from dincli.services.aggregator import get_aggregated_cid
 
@@ -159,7 +159,7 @@ def stake(amount: int, network: str = typer.Option(None, "--network", help="Targ
         else:
             console.print(f"[bold red]✗ Could not stake DINTokens.[/bold red]")
 
-@dintoken_app.command(help="Check stake")
+@dintoken_app.command("read-stake", help="Check stake")
 def read_stake(network: str = typer.Option(None, "--network", help="Target network (local|sepolia|mainnet)")):
     effective_network = resolve_network(network)
     w3 = get_w3(effective_network)
@@ -174,12 +174,14 @@ def read_stake(network: str = typer.Option(None, "--network", help="Target netwo
 
     console.print("Aggregator address: ", account.address)
     console.print("DINStake address: ", dinstake_address)
-    console.print("Aggregator DIN token stake: ", DinStake_contract.functions.getStake(account.address).call())
+    console.print("Aggregator staked DIN tokens : ", DinStake_contract.functions.getStake(account.address).call())
 
 
 @app.command(help="Register as aggregator")
-def register(network: str = typer.Option(None, "--network", help="Target network (local|sepolia|mainnet)"),
-taskCoordinator: str = typer.Option(None, "--taskCoordinator", help="Task coordinator address")):
+def register(
+    network: str = typer.Option(None, "--network", help="Target network (local|sepolia|mainnet)"),
+    model_id: int = typer.Option(..., "--model-id", help="Model ID")):
+
     effective_network = resolve_network(network)
     w3 = get_w3(effective_network)
     din_addresses = load_din_info()
@@ -188,11 +190,10 @@ taskCoordinator: str = typer.Option(None, "--taskCoordinator", help="Task coordi
 
     env_config = dotenv_values(".env")
 
-    if taskCoordinator is None:
-        taskCoordinator = env_config.get("DINTaskCoordinator_Contract_Address")
+    task_coordinator_address = get_manifest_key(effective_network, "DINTaskCoordinator_Contract", model_id)
 
     taskCoordinator_artifact_path = Path(__file__).parent / "abis" / "DINTaskCoordinator.json"
-    taskCoordinator_contract = get_contract_instance(taskCoordinator_artifact_path, effective_network, taskCoordinator)
+    taskCoordinator_contract = get_contract_instance(taskCoordinator_artifact_path, effective_network, task_coordinator_address)
     
     coordinator_artifact_path = Path(__file__).parent / "abis" / "DinCoordinator.json"
     DinCoordinator_contract = get_contract_instance(coordinator_artifact_path, effective_network, dincoordinator_address)
@@ -206,19 +207,19 @@ taskCoordinator: str = typer.Option(None, "--taskCoordinator", help="Task coordi
     
     curr_GIstate = taskCoordinator_contract.functions.GIstate().call()
 
-    if GIstateToStr(curr_GIstate) != "DINvalidatorRegistrationStarted":
-        console.print(f"[bold red]✗ Can not register validators at this time. Current state: {GIstateToStr(curr_GIstate)} for GI {curr_GI} where taskCoordinator is {taskCoordinator}[/bold red]")
+    if GIstateToStr(curr_GIstate) != "DINaggregatorsRegistrationStarted":
+        console.print(f"[bold red]✗ Can not register aggregator at this time. Current state: {GIstateToStr(curr_GIstate)} for GI {curr_GI} where taskCoordinator is {task_coordinator_address}[/bold red]")
         return
 
-    registered_validators = taskCoordinator_contract.functions.getDINtaskValidators(curr_GI).call()
+    registered_aggregators = taskCoordinator_contract.functions.getDINtaskAggregators(curr_GI).call()
     
     
     console.print("Aggregator address: ", account.address)
-    console.print("DIN task Coordinator address: ", taskCoordinator)
+    console.print("DIN task Coordinator address: ", task_coordinator_address)
     console.print("Current GI: ", curr_GI)
     console.print("Current GI state: ", GIstateToStr(curr_GIstate))
-    console.print("Registered validators: ", registered_validators)
-    if account.address in registered_validators:
+    # console.print("Registered aggregators: ", registered_aggregators)
+    if account.address in registered_aggregators:
         console.print(f"[bold red]✗ Aggregator already registered.[/bold red]")
         return
     else:
@@ -232,7 +233,7 @@ taskCoordinator: str = typer.Option(None, "--taskCoordinator", help="Task coordi
         else:
             console.print(f"[bold green]✓ Aggregator has enough stake.[/bold green]")
     
-            tx = taskCoordinator_contract.functions.registerDINvalidator(curr_GI).build_transaction({
+            tx = taskCoordinator_contract.functions.registerDINaggregator(curr_GI).build_transaction({
                 "from": account.address, 
                 "nonce": w3.eth.get_transaction_count(account.address), 
                 "gas": int(3000000), 

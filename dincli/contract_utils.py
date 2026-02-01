@@ -1,7 +1,6 @@
 from web3 import Web3
 from dotenv import dotenv_values
 import json   
-from dincli.utils import get_w3
 import os
 
 
@@ -21,6 +20,8 @@ def get_contract_instance(
     Returns:
         web3.contract.Contract
     """
+
+    from dincli.utils import get_w3
     w3 = get_w3(network)
     
     if not os.path.isfile(artifact_path):

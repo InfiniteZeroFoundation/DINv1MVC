@@ -150,7 +150,7 @@
     },
     {
       "inputs": [],
-      "name": "T1_MODELS_PER_BATCH",
+      "name": "T1_AGGREGATORS_PER_BATCH",
       "outputs": [
         {
           "internalType": "uint8",
@@ -163,7 +163,7 @@
     },
     {
       "inputs": [],
-      "name": "T1_VALIDATORS_PER_BATCH",
+      "name": "T1_MODELS_PER_BATCH",
       "outputs": [
         {
           "internalType": "uint8",
@@ -195,7 +195,7 @@
           "type": "uint256"
         }
       ],
-      "name": "closeDINauditorRegistration",
+      "name": "closeDINaggregatorsRegistration",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
@@ -208,7 +208,7 @@
           "type": "uint256"
         }
       ],
-      "name": "closeDINvalidatorRegistration",
+      "name": "closeDINauditorsRegistration",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
@@ -253,19 +253,6 @@
       "type": "function"
     },
     {
-      "inputs": [],
-      "name": "dinTaskAuditorContract",
-      "outputs": [
-        {
-          "internalType": "contract IDINTaskAuditor",
-          "name": "",
-          "type": "address"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
       "inputs": [
         {
           "internalType": "uint256",
@@ -278,10 +265,23 @@
           "type": "uint256"
         }
       ],
-      "name": "dinValidators",
+      "name": "dinAggregators",
       "outputs": [
         {
           "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "dinTaskAuditorContract",
+      "outputs": [
+        {
+          "internalType": "contract IDINTaskAuditor",
           "name": "",
           "type": "address"
         }
@@ -362,7 +362,7 @@
           "type": "uint256"
         }
       ],
-      "name": "getDINtaskValidators",
+      "name": "getDINtaskAggregators",
       "outputs": [
         {
           "internalType": "address[]",
@@ -488,7 +488,7 @@
           "type": "address"
         }
       ],
-      "name": "isDINValidator",
+      "name": "isDINAggregator",
       "outputs": [
         {
           "internalType": "bool",
@@ -533,7 +533,7 @@
           "type": "uint256"
         }
       ],
-      "name": "registerDINvalidator",
+      "name": "registerDINaggregator",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
@@ -655,7 +655,7 @@
           "type": "uint256"
         }
       ],
-      "name": "startDINauditorRegistration",
+      "name": "startDINaggregatorsRegistration",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
@@ -668,7 +668,7 @@
           "type": "uint256"
         }
       ],
-      "name": "startDINvalidatorRegistration",
+      "name": "startDINauditorsRegistration",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"

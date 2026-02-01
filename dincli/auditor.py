@@ -5,9 +5,10 @@ from typing import Optional
 from rich.console import Console
 from pathlib import Path
 from dotenv import dotenv_values, set_key, get_key, unset_key
-from dincli.utils import resolve_network, get_w3, load_account, load_din_info, load_usdt_config, GIstateToStr, GIstatestrToIndex
+from dincli.utils import resolve_network, get_w3, load_account, load_din_info, load_usdt_config, GIstateToStr, GIstatestrToIndex, get_manifest_key, CACHE_DIR, load_custom_fn
 from dincli.contract_utils import get_contract_instance
 from dincli.services.auditor import Score_model_by_auditor
+from dincli.services.ipfs import retrieve_from_ipfs
 
 app = typer.Typer(help="Commands for Auditors in DIN.")
 console = Console()
@@ -177,29 +178,25 @@ def read_stake(network: str = typer.Option(None, "--network", help="Target netwo
 
 
 @app.command(help="Register as Auditor")
-def register(network: str = typer.Option(None, "--network", help="Target network (local|sepolia|mainnet)"),
-taskCoordinator: str = typer.Option(None, "--taskCoordinator", help="Task coordinator address"),
-taskAuditor: str = typer.Option(None, "--taskAuditor", help="Task auditor address")):
+def register(
+    network: str = typer.Option(None, "--network", help="Target network (local|sepolia|mainnet)"),
+    model_id: int = typer.Option(None, "--model-id", help="Model ID")
+    ):
     effective_network = resolve_network(network)
     w3 = get_w3(effective_network)
     din_addresses = load_din_info()
     dincoordinator_address = din_addresses[effective_network]["coordinator"] 
     dinstake_address = din_addresses[effective_network]["stake"]
 
-    
-    env_config = dotenv_values(".env")
+    taskCoordinator_address = get_manifest_key(effective_network, "DINTaskCoordinator_Contract", model_id)
 
-    if taskCoordinator is None:
-        taskCoordinator = env_config.get("DINTaskCoordinator_Contract_Address")
-
-    if taskAuditor is None:
-        taskAuditor = env_config.get("DINTaskAuditor_Contract_Address")
+    taskAuditor_address = get_manifest_key(effective_network, "DINTaskAuditor_Contract", model_id)
 
     taskCoordinator_artifact_path = Path(__file__).parent / "abis" / "DINTaskCoordinator.json"
-    taskCoordinator_contract = get_contract_instance(taskCoordinator_artifact_path, effective_network, taskCoordinator)
+    taskCoordinator_contract = get_contract_instance(taskCoordinator_artifact_path, effective_network, taskCoordinator_address)
 
     taskAuditor_artifact_path = Path(__file__).parent / "abis" / "DINTaskAuditor.json"
-    taskAuditor_contract = get_contract_instance(taskAuditor_artifact_path, effective_network, taskAuditor)
+    taskAuditor_contract = get_contract_instance(taskAuditor_artifact_path, effective_network, taskAuditor_address)
     
     coordinator_artifact_path = Path(__file__).parent / "abis" / "DinCoordinator.json"
     DinCoordinator_contract = get_contract_instance(coordinator_artifact_path, effective_network, dincoordinator_address)
@@ -213,8 +210,8 @@ taskAuditor: str = typer.Option(None, "--taskAuditor", help="Task auditor addres
     
     curr_GIstate = taskCoordinator_contract.functions.GIstate().call()
 
-    if GIstateToStr(curr_GIstate) != "DINauditorRegistrationStarted":
-        console.print(f"[bold red]✗ Can not register validators at this time. Current state: {GIstateToStr(curr_GIstate)} for GI {curr_GI} where taskAuditor is {taskAuditor}[/bold red]")
+    if GIstateToStr(curr_GIstate) != "DINauditorsRegistrationStarted":
+        console.print(f"[bold red]✗ Can not register auditor at this time. Current state: {GIstateToStr(curr_GIstate)} for GI {curr_GI} where taskAuditor is {taskAuditor_address}[/bold red]")
         return
 
     
@@ -222,11 +219,11 @@ taskAuditor: str = typer.Option(None, "--taskAuditor", help="Task auditor addres
 
     
     console.print("Auditor address: ", account.address)
-    console.print("DIN task Auditor address: ", taskAuditor)
-    console.print("DIN task Coordinator address: ", taskCoordinator)
+    console.print("DIN task Auditor address: ", taskAuditor_address)
+    console.print("DIN task Coordinator address: ", taskCoordinator_address)
     console.print("Current GI: ", curr_GI)
     console.print("Current GI state: ", GIstateToStr(curr_GIstate))
-    console.print("Registered Auditors: ", registered_auditors)
+    # console.print("Registered Auditors: ", registered_auditors)
     if account.address in registered_auditors:
         console.print(f"[bold red]✗ Auditor already registered.[/bold red]")
         return
@@ -263,195 +260,199 @@ taskAuditor: str = typer.Option(None, "--taskAuditor", help="Task auditor addres
 
 
 
-@lms_evaluation_app.command(help="")
+@lms_evaluation_app.command("show-batch", help="Show LMS evaluation batch")
 def show_batch(
     network: str = typer.Option(None, "--network", help="Target network (local|sepolia|mainnet)"),
-    task_coordinator: str = typer.Option(None, "--taskCoordinator", help="DINTaskCoordinator contract address"),
-    task_auditor: str = typer.Option(None, "--taskAuditor", help="DINTaskAuditor contract address"),
+    model_id: int = typer.Option(..., "--model-id", help="Model ID"),
     gi: int = typer.Option(None, "--gi", help="Global iteration number"),
     batch: int = typer.Option(None, "--batch", help="Batch number"),
 ):
     effective_network = resolve_network(network)
     w3 = get_w3(effective_network)
     account = load_account()
-    env_config = dotenv_values(".env")
     
-    if task_coordinator is None:
-        task_coordinator = env_config.get("DINTaskCoordinator_Contract_Address")
-    if task_auditor is None:
-        task_auditor = env_config.get("DINTaskAuditor_Contract_Address")
+    
+    task_coordinator_address = get_manifest_key(effective_network, "DINTaskCoordinator_Contract", model_id)
+    task_auditor_address = get_manifest_key(effective_network, "DINTaskAuditor_Contract", model_id)
 
     task_coordinator_artifact_path = Path(__file__).parent / "abis" / "DINTaskCoordinator.json"
     if not task_coordinator_artifact_path.exists():
         console.print("[red]Error:[/red] task_coordinator ABI file not found")
         raise typer.Exit(1)
 
-    task_coordinator_contract = get_contract_instance(task_coordinator_artifact_path, effective_network, task_coordinator)
+    task_coordinator_contract = get_contract_instance(task_coordinator_artifact_path, effective_network, task_coordinator_address)
 
     task_auditor_artifact_path = Path(__file__).parent / "abis" / "DINTaskAuditor.json"
     if not task_auditor_artifact_path.exists():
         console.print("[red]Error:[/red] task_auditor ABI file not found")
         raise typer.Exit(1)
-    task_auditor_contract = get_contract_instance(task_auditor_artifact_path, effective_network, task_auditor)
+    task_auditor_contract = get_contract_instance(task_auditor_artifact_path, effective_network, task_auditor_address)
 
     curr_GI = task_coordinator_contract.functions.GI().call()
     curr_GIstate = task_coordinator_contract.functions.GIstate().call()
 
 
-    if gi:
-        if gi != curr_GI:
-            console.print(f"[bold red]✗ invalid Global iteration number {gi}. Current GI: {curr_GI}[/bold red]")
-            return
+    if not gi:
+        ref_gi = curr_GI
+    else:
+        if gi > curr_GI:
+            console.print(f"[red]Error:[/red] Invalid global iteration {gi} given in command: gi > curr_GI ({curr_GI})")
+            raise typer.Exit(1)
+        ref_gi = gi
+
+    
 
     console.print("Auditor address: ", account.address)
-    console.print("DIN task Auditor address: ", task_auditor)
-    console.print("DIN task Coordinator address: ", task_coordinator)
+    console.print("DIN task Auditor address: ", task_auditor_address)
+    console.print("DIN task Coordinator address: ", task_coordinator_address)
     console.print("Current GI: ", curr_GI)
 
-    if curr_GI < 1 or curr_GIstate < GIstatestrToIndex("AuditorsBatchesCreated"):
-        console.print("[red]Error:[/red] Can not show auditor batches at this time as GIstate is ",GIstateToStr(curr_GIstate))
-        raise typer.Exit(1)
 
-    console.print(f"[bold green]Showing auditor batch![/bold green]")
+    if (ref_gi == curr_GI and curr_GIstate >= GIstatestrToIndex("AuditorsBatchesCreated")) or (ref_gi < curr_GI):
+        console.print(f"[bold green]Showing auditor batch![/bold green]")
     
-    audtor_batch_count = task_auditor_contract.functions.AuditorsBatchCount(curr_GI).call()
+        audtor_batch_count = task_auditor_contract.functions.AuditorsBatchCount(ref_gi).call()
 
-    raw_audit_batches = []
-    model_idx_to_batch_id = {}
-    model_idx_to_test_cid = {}
-    auditor_batch = {"raw_batches": []}
-
-
-    if batch:
-        raw_audit_batches.append(task_auditor_contract.functions.getAuditorsBatch(curr_GI, batch).call())
-    else:
-        for i in range(audtor_batch_count):
-            raw_audit_batches.append(task_auditor_contract.functions.getAuditorsBatch(curr_GI, i).call())
-
-    for batch_data in raw_audit_batches:
-        batch_id, auditors, model_indexes, test_cid = batch_data
-
-        if account.address.lower() in [a.lower() for a in auditors]:
-            auditor_batch["raw_batches"].append({"batch_id": batch_id, "auditors": auditors, "model_indexes": model_indexes, "test_cid": test_cid})
-
-    auditor_batch["batch_count"] = len(auditor_batch["raw_batches"])
-
-    console.print("Auditor batch count: ", auditor_batch["batch_count"])
+        raw_audit_batches = []
+        model_idx_to_batch_id = {}
+        model_idx_to_test_cid = {}
+        auditor_batch = {"raw_batches": []}
 
 
-    relevant_lm_submissions = []
-    table = Table(title=f"Auditor Batches for GI {curr_GI}", show_header=True, header_style="bold magenta")
-    table.add_column("Batch ID", style="dim")
-    table.add_column("Auditors", overflow="fold")
-    table.add_column("Model Indexes", overflow="fold")
-    table.add_column("Test CID")
+        if batch:
+            raw_audit_batches.append(task_auditor_contract.functions.getAuditorsBatch(ref_gi, batch).call())
+        else:
+            for i in range(audtor_batch_count):
+                raw_audit_batches.append(task_auditor_contract.functions.getAuditorsBatch(ref_gi, i).call())
 
-    for batch in auditor_batch["raw_batches"]:
-        relevant_lm_submissions.extend(batch["model_indexes"])
-        for idx in batch["model_indexes"]:
-            model_idx_to_batch_id[idx] = batch["batch_id"]
-            model_idx_to_test_cid[idx] = batch["test_cid"]
-        table.add_row(
+        for batch_data in raw_audit_batches:
+            batch_id, auditors, model_indexes, test_cid = batch_data
+
+            if account.address.lower() in [a.lower() for a in auditors]:
+                auditor_batch["raw_batches"].append({"batch_id": batch_id, "auditors": auditors, "model_indexes": model_indexes, "test_cid": test_cid})
+
+        auditor_batch["batch_count"] = len(auditor_batch["raw_batches"])
+
+        console.print("Auditor batch count: ", auditor_batch["batch_count"])
+
+
+        relevant_lm_submissions = []
+        table = Table(title=f"Auditor Batches for GI {curr_GI}", show_header=True, header_style="bold magenta")
+        table.add_column("Batch ID", style="dim")
+        table.add_column("Auditors", overflow="fold")
+        table.add_column("Model Indexes", overflow="fold")
+        table.add_column("Test CID")
+
+        for batch in auditor_batch["raw_batches"]:
+            relevant_lm_submissions.extend(batch["model_indexes"])
+            for idx in batch["model_indexes"]:
+                model_idx_to_batch_id[idx] = batch["batch_id"]
+                model_idx_to_test_cid[idx] = batch["test_cid"]
+            table.add_row(
             str(batch["batch_id"]),
             ", ".join(batch["auditors"]) if batch["auditors"] else "—",
             ", ".join(map(str, batch["model_indexes"])) if batch["model_indexes"] else "—",
             batch["test_cid"] if batch["test_cid"] != "None" else "—"
         )
     
-    console.print(table)
+        console.print(table)
 
 
-    raw_lm_submissions = task_auditor_contract.functions.getClientModels(curr_GI).call()
-    
-    lm_submissions = {}
+        raw_lm_submissions = task_auditor_contract.functions.getClientModels(ref_gi).call()
+        
+        lm_submissions = {}
 
-    assigned_lm_submissions = {}
+        assigned_lm_submissions = {}
 
-    for idx, sub in enumerate(raw_lm_submissions):
-        if idx not in relevant_lm_submissions:
-            continue
-        else:
-            client, model_cid, submitted_at, eligible, evaluated, approved, final_avg = sub
-            lm_submissions[idx] = {"model_index": idx, "client": client, "model_cid": model_cid, "submitted_at": submitted_at, "eligible": eligible, "evaluated": evaluated, "approved": approved, "final_avg": final_avg}
+        for idx, sub in enumerate(raw_lm_submissions):
+            if idx not in relevant_lm_submissions:
+                continue
+            else:
+                client, model_cid, submitted_at, eligible, evaluated, approved, final_avg = sub
+                lm_submissions[idx] = {"model_index": idx, "client": client, "model_cid": model_cid, "submitted_at": submitted_at, "eligible": eligible, "evaluated": evaluated, "approved": approved, "final_avg": final_avg}
 
-            batch_id = model_idx_to_batch_id[idx]
+                batch_id = model_idx_to_batch_id[idx]
 
-            try:
-                has_voted = task_auditor_contract.functions.hasAuditedLM(curr_GI, batch_id, account.address, idx).call()
-            except:
-                has_voted = False
-            try:
-                is_eligible = task_auditor_contract.functions.LMeligibleVote(curr_GI, batch_id, account.address, idx).call()
-            except:
-                is_eligible = False
-            try:
-                has_auditScores = task_auditor_contract.functions.auditScores(curr_GI, batch_id, account.address, idx).call()
-            except:
-                has_auditScores = False
+                try:
+                    has_voted = task_auditor_contract.functions.hasAuditedLM(curr_GI, batch_id, account.address, idx).call()
+                except:
+                    has_voted = False
+                try:
+                    is_eligible = task_auditor_contract.functions.LMeligibleVote(curr_GI, batch_id, account.address, idx).call()
+                except:
+                    is_eligible = False
+                try:
+                    has_auditScores = task_auditor_contract.functions.auditScores(curr_GI, batch_id, account.address, idx).call()
+                except:
+                    has_auditScores = False
 
-            assigned_lm_submissions[idx] = {
-                "model_index": idx,
-                "client": client,
-                "model_cid": model_cid,
-                "submitted_at": submitted_at,
-                "batch_id": batch_id,
-                "has_voted": has_voted,
-                "is_eligible": is_eligible,
-                "has_auditScores": has_auditScores,
-                "test_cid": model_idx_to_test_cid[idx]
+                assigned_lm_submissions[idx] = {
+                    "model_index": idx,
+                    "client": client,
+                    "model_cid": model_cid,
+                    "submitted_at": submitted_at,
+                    "batch_id": batch_id,
+                    "has_voted": has_voted,
+                    "is_eligible": is_eligible,
+                    "has_auditScores": has_auditScores,
+                    "test_cid": model_idx_to_test_cid[idx]
 
-            }
+                }
 
-    lm_submissions_table = Table(title=f"Relevant LM Submissions for GI {curr_GI} for auditor {account.address}", show_header=True, header_style="bold magenta")
+        lm_submissions_table = Table(title=f"Relevant LM Submissions for GI {curr_GI} for auditor {account.address}", show_header=True, header_style="bold magenta")
 
-    lm_submissions_table.add_column("Model Index", style="dim")
-    lm_submissions_table.add_column("Client", overflow="fold")
-    lm_submissions_table.add_column("Model CID", overflow="fold")
-    lm_submissions_table.add_column("Submitted At", overflow="fold")
-    lm_submissions_table.add_column("Eligible", overflow="fold")
-    lm_submissions_table.add_column("Evaluated", overflow="fold")
-    lm_submissions_table.add_column("Approved", overflow="fold")
-    lm_submissions_table.add_column("Final Avg", overflow="fold")
+        lm_submissions_table.add_column("Model Index", style="dim")
+        lm_submissions_table.add_column("Client", overflow="fold")
+        lm_submissions_table.add_column("Model CID", overflow="fold")
+        lm_submissions_table.add_column("Submitted At", overflow="fold")
+        lm_submissions_table.add_column("Eligible", overflow="fold")
+        lm_submissions_table.add_column("Evaluated", overflow="fold")
+        lm_submissions_table.add_column("Approved", overflow="fold")
+        lm_submissions_table.add_column("Final Avg", overflow="fold")
 
-    for sub in lm_submissions.values():
-        lm_submissions_table.add_row(
-            str(sub["model_index"]),
-            str(sub["client"]),
-            str(sub["model_cid"]),
-            str(sub["submitted_at"]),
-            str(sub["eligible"]),
-            str(sub["evaluated"]),
-            str(sub["approved"]),
-            str(sub["final_avg"]) if sub["final_avg"] != "None" else "—"
-        )
-    console.print(lm_submissions_table)
+        for sub in lm_submissions.values():
+            lm_submissions_table.add_row(
+                str(sub["model_index"]),
+                str(sub["client"]),
+                str(sub["model_cid"]),
+                str(sub["submitted_at"]),
+                str(sub["eligible"]),
+                str(sub["evaluated"]),
+                str(sub["approved"]),
+                str(sub["final_avg"]) if sub["final_avg"] != "None" else "—"
+            )
+        console.print(lm_submissions_table)
 
-    
-    assigned_lm_submissions_table = Table(title=f"Assigned LM Submissions for GI {curr_GI} for auditor {account.address}", show_header=True, header_style="bold magenta")
+        
+        assigned_lm_submissions_table = Table(title=f"Evaluated/Assigned LM Submissions for GI {curr_GI} for auditor {account.address}", show_header=True, header_style="bold magenta")
 
-    assigned_lm_submissions_table.add_column("Model Index", style="dim")
-    assigned_lm_submissions_table.add_column("Client", overflow="fold")
-    assigned_lm_submissions_table.add_column("Model CID", overflow="fold")
-    assigned_lm_submissions_table.add_column("Submitted At", overflow="fold")
-    assigned_lm_submissions_table.add_column("Batch ID", overflow="fold")
-    assigned_lm_submissions_table.add_column("Has Voted", overflow="fold")
-    assigned_lm_submissions_table.add_column("Is Eligible", overflow="fold")
-    assigned_lm_submissions_table.add_column("Has AuditScores", overflow="fold")
-    assigned_lm_submissions_table.add_column("Test CID", overflow="fold")
-    
-    for idx, sub in assigned_lm_submissions.items():
-        assigned_lm_submissions_table.add_row(
-            str(sub["model_index"]),
-            str(sub["client"]),
-            str(sub["model_cid"]),
-            str(sub["submitted_at"]),
-            str(sub["batch_id"]),
-            str(sub["has_voted"]),
-            str(sub["is_eligible"]),
-            str(sub["has_auditScores"]),
-            str(sub["test_cid"]) if sub["test_cid"] != "None" else "—"
-        )
-    console.print(assigned_lm_submissions_table)
+        assigned_lm_submissions_table.add_column("Model Index", style="dim")
+        assigned_lm_submissions_table.add_column("Client", overflow="fold")
+        assigned_lm_submissions_table.add_column("Model CID", overflow="fold")
+        assigned_lm_submissions_table.add_column("Submitted At", overflow="fold")
+        assigned_lm_submissions_table.add_column("Batch ID", overflow="fold")
+        assigned_lm_submissions_table.add_column("Has Voted", overflow="fold")
+        assigned_lm_submissions_table.add_column("Is Eligible", overflow="fold")
+        assigned_lm_submissions_table.add_column("Has AuditScores", overflow="fold")
+        assigned_lm_submissions_table.add_column("Test CID", overflow="fold")
+        
+        for idx, sub in assigned_lm_submissions.items():
+            assigned_lm_submissions_table.add_row(
+                str(sub["model_index"]),
+                str(sub["client"]),
+                str(sub["model_cid"]),
+                str(sub["submitted_at"]),
+                str(sub["batch_id"]),
+                str(sub["has_voted"]),
+                str(sub["is_eligible"]),
+                str(sub["has_auditScores"]),
+                str(sub["test_cid"]) if sub["test_cid"] != "None" else "—"
+            )
+        console.print(assigned_lm_submissions_table)
+    else:
+        console.print("[red]Error:[/red] Can not show auditor batches at this time as GIstate is ",GIstateToStr(curr_GIstate))
+        raise typer.Exit(1)
+
 
 @lms_evaluation_app.command("evaluate")
 def evaluate_lms(
@@ -460,34 +461,28 @@ def evaluate_lms(
     batch: int = typer.Option(None, "--batch", help="Batch index"),
     submit: bool = typer.Option(False, "--submit", help="Submit evaluation"),
     gi: int = typer.Option(None, "--gi", help="Global iteration number"),
-    task_auditor: str = typer.Option(None, "--taskAuditor", help="DINTaskAuditor contract address"),
-    task_coordinator: str = typer.Option(None, "--taskCoordinator", help="DINTaskCoordinator contract address"),
+    model_id: int = typer.Option(..., "--model-id", help="Model index"),
 ):
 
     effective_network = resolve_network(network)
     w3 = get_w3(effective_network)
     account = load_account()
-    env_config = dotenv_values(".env")
     
-
-    
-    if task_coordinator is None:
-        task_coordinator = env_config.get("DINTaskCoordinator_Contract_Address")
-    if task_auditor is None:
-        task_auditor = env_config.get("DINTaskAuditor_Contract_Address")
+    task_coordinator_address = get_manifest_key(effective_network, "DINTaskCoordinator_Contract", model_id)
+    task_auditor_address = get_manifest_key(effective_network, "DINTaskAuditor_Contract", model_id)
 
     task_coordinator_artifact_path = Path(__file__).parent / "abis" / "DINTaskCoordinator.json"
     if not task_coordinator_artifact_path.exists():
         console.print("[red]Error:[/red] task_coordinator ABI file not found")
         raise typer.Exit(1)
 
-    task_coordinator_contract = get_contract_instance(task_coordinator_artifact_path, effective_network, task_coordinator)
+    task_coordinator_contract = get_contract_instance(task_coordinator_artifact_path, effective_network, task_coordinator_address)
 
     task_auditor_artifact_path = Path(__file__).parent / "abis" / "DINTaskAuditor.json"
     if not task_auditor_artifact_path.exists():
         console.print("[red]Error:[/red] task_auditor ABI file not found")
         raise typer.Exit(1)
-    task_auditor_contract = get_contract_instance(task_auditor_artifact_path, effective_network, task_auditor)
+    task_auditor_contract = get_contract_instance(task_auditor_artifact_path, effective_network, task_auditor_address)
 
     curr_GI = task_coordinator_contract.functions.GI().call()
     curr_GIstate = task_coordinator_contract.functions.GIstate().call()
@@ -498,8 +493,8 @@ def evaluate_lms(
             return
 
     console.print("Auditor address: ", account.address)
-    console.print("DIN task Auditor address: ", task_auditor)
-    console.print("DIN task Coordinator address: ", task_coordinator)
+    console.print("DIN task Auditor address: ", task_auditor_address)
+    console.print("DIN task Coordinator address: ", task_coordinator_address)
     console.print("Current GI: ", curr_GI)
     console.print("Current GI state: ", GIstateToStr(curr_GIstate))
     
@@ -535,12 +530,28 @@ def evaluate_lms(
                 continue
 
             found_any = True
-            console.print(f"[bold green]Evaluating LM {model_index} from batch {batch_id}![/bold green]")
+            console.print(f"[bold green]Evaluating LM {model_index} from Audit batch {batch_id}![/bold green]")
 
             lms = task_auditor_contract.functions.lmSubmissions(curr_GI, model_index).call()
             lm_cid = lms[1]
+
+            model_base_dir = Path(CACHE_DIR) / effective_network / f"model_{model_id}"
+
+            if get_manifest_key(effective_network, "Score_model_by_auditor", model_id)["type"] == "custom":
+                auditor_service_path_str = get_manifest_key(effective_network, "Score_model_by_auditor", model_id)["path"]
+                auditor_service_path = Path(model_base_dir) / auditor_service_path_str
+           
+                if not auditor_service_path.exists():
+                    retrieve_from_ipfs(get_manifest_key(effective_network,"Score_model_by_auditor", model_id)["ipfs"], auditor_service_path)
+                    
+                fn = load_custom_fn(
+                auditor_service_path,
+                "Score_model_by_auditor")
+                
+                score, eligible = fn(curr_GI, genesis_model_cid, batch_id, model_index, account.address, testDataCID, lm_cid, model_base_dir)
             
-            score, eligible = Score_model_by_auditor(curr_GI, genesis_model_cid, batch_id, model_index, account.address, testDataCID, lm_cid)
+            else:
+                score, eligible = Score_model_by_auditor(curr_GI, genesis_model_cid, batch_id, model_index, account.address, testDataCID, lm_cid, model_base_dir)
 
             console.print(f"Score: {score}")
             console.print(f"Eligible: {eligible}")

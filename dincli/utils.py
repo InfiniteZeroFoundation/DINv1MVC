@@ -1,6 +1,7 @@
 import importlib.util
 import json
 from web3 import Web3
+from datetime import datetime
 from pathlib import Path
 from platformdirs import user_config_dir, user_cache_dir
 from typing import Optional, Callable
@@ -10,6 +11,8 @@ import time
 from getpass import getpass
 from dincli.log import logger
 from rich.console import Console
+from dincli.contract_utils import get_contract_instance
+import re
 
 console = Console()
 
@@ -357,10 +360,10 @@ states = [
         "AwaitingGenesisModel",
         "GenesisModelCreated",
         "GIstarted",
-        "DINvalidatorRegistrationStarted",
-        "DINvalidatorRegistrationClosed",
-        "DINauditorRegistrationStarted",
-        "DINauditorRegistrationClosed",
+        "DINaggregatorsRegistrationStarted",
+        "DINaggregatorsRegistrationClosed",
+        "DINauditorsRegistrationStarted",
+        "DINauditorsRegistrationClosed",
         "LMSstarted",
         "LMSclosed",
         "AuditorsBatchesCreated",
@@ -372,7 +375,7 @@ states = [
         "T2AggregationStarted",
         "T2AggregationDone",
         "AuditorsSlashed",
-        "ValidatorSlashed",
+        "AggregatorsSlashed",
         "GIended"
     ]
     
@@ -424,20 +427,25 @@ def load_tasks() -> dict:
         return {}
 
 
-def load_custom_fn(module_path: Path, fn_name: str) -> Callable:
+def load_custom_fn(module_path: Path, fn_name: str, ipfs_hash: str = None) -> Callable:
     """
     Dynamically load a function from a project-local service file.
 
     Example:
         load_custom_fn(
             Path.cwd() / "services" / "modelowner.py",
-            "getGenesisModelIpfs"
+            "getGenesisModelIpfs",
+            "Qma2FMYTrf9Ec4rfMdWLnVWFUniGfi2iVyh3VVYHYKym9w"
         )
     """
     if not module_path.exists():
-        raise FileNotFoundError(
-            f"Custom service file not found: {module_path}"
-        )
+        if ipfs_hash:
+            from dincli.services.ipfs import retrieve_from_ipfs
+            retrieve_from_ipfs(ipfs_hash, module_path)
+        else:
+            raise FileNotFoundError(
+                f"Custom service file not found: {module_path}"
+            )
 
     spec = importlib.util.spec_from_file_location(
         module_path.stem,
@@ -462,3 +470,73 @@ def load_custom_fn(module_path: Path, fn_name: str) -> Callable:
         )
 
     return fn 
+
+
+def cache_manifest(model_id: int, network: str, info: bool = False, update: bool = False):
+    if model_id < 0:
+        console.print("[red]Error:[/red] Model ID must be non-negative")
+        raise typer.Exit(1)
+
+    os.makedirs(CACHE_DIR / network /  f"model_{model_id}", exist_ok=True)
+
+    if not (CACHE_DIR / network /  f"model_{model_id}" / "manifest.json").exists() or info or update:
+
+        din_info = load_din_info()
+        din_registry_address = din_info[network]["registry"]
+        din_registry_abi = Path(__file__).parent / "abis" / "DINModelRegistry.json"
+
+        din_registry_contract = get_contract_instance(din_registry_abi, network, din_registry_address)
+     
+
+        model_info = din_registry_contract.functions.getModel(model_id).call()
+
+        if info:
+            console.print("[bold green]Model Info :[/bold green]")
+            console.print("Model Owner :", model_info[0])
+            console.print("Is Open Source :", model_info[1])
+            console.print("Manifest CID :", model_info[2])
+            console.print("Created At :", model_info[3])
+            console.print("Created At Human Readable :", datetime.fromtimestamp(model_info[3]).strftime("%Y-%m-%d %H:%M:%S %p"))  # am/pm
+            console.print("Task Coordinator Address :", model_info[4])
+            console.print("Task Auditor Address :", model_info[5])
+        if  update or not (CACHE_DIR / network /  f"model_{model_id}" / "manifest.json").exists():
+
+            from dincli.services.ipfs import retrieve_from_ipfs
+            retrieve_from_ipfs(model_info[2], CACHE_DIR / network /  f"model_{model_id}/manifest.json")
+        
+
+def get_manifest_key( network: str, key: str, model_id: int = None, task_coordinator_address: str = None):
+    # Ensure exactly one identifier is provided
+    has_model_id = model_id is not None
+    has_coordinator_address = task_coordinator_address is not None
+
+    if not has_model_id and not has_coordinator_address:
+        raise ValueError("Either model_id or task_coordinator_address must be provided")
+
+    if has_model_id and has_coordinator_address:
+        raise ValueError("Only one of model_id or task_coordinator_address can be provided")
+
+    if has_model_id:
+        manifest_path = CACHE_DIR / network /  f"model_{model_id}" / "manifest.json"
+        if not manifest_path.exists():
+            cache_manifest(model_id, network)
+    
+        with open(manifest_path, "r") as f:
+            manifest = json.load(f)
+        
+        return manifest[key]
+    
+    if has_coordinator_address:
+
+        manifest_path = Path(os.getcwd()) / "tasks" / network.lower() / task_coordinator_address / "manifest.json"
+        if not manifest_path.exists():
+            raise FileNotFoundError(f"Manifest not found for task coordinator {task_coordinator_address} at {manifest_path}")
+        
+        with open(manifest_path, "r") as f:
+            manifest = json.load(f)
+        return manifest[key]
+    
+
+def is_ethereum_address(s: str) -> bool:
+    """Check if string looks like a valid Ethereum address (case-insensitive, 42 chars, starts with 0x)."""
+    return bool(re.fullmatch(r'0x[a-fA-F0-9]{40}', s))

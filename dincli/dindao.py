@@ -17,6 +17,10 @@ deploy_app = typer.Typer(help="Deploy DIN smart contracts")
 
 app.add_typer(deploy_app, name="deploy")
 
+registry_app = typer.Typer(help="Registry sub-app (for 'dincli dindao registry to interact with DINRegistry ...')")
+
+app.add_typer(registry_app, name="registry")
+
 @deploy_app.command()
 def din_coordinator(
     network: str = typer.Option(None, "--network", help="Target network (local|sepolia|mainnet)"),
@@ -277,17 +281,24 @@ def add_slasher(
     if contract:
         contract_address = contract
     elif  task_coordinator_flag:
-        contract_address = env_config.get("DINTaskCoordinator_Contract_Address")
+        contract_address = env_config.get(effective_network.upper()+"_DINTaskCoordinator_Contract_Address")
         if not contract_address:
-            console.print("[bold red] X DINTaskCoordinator_Contract_Address not found in .env file[/bold red]")
+            console.print(f"[bold red] X {effective_network.upper()}_DINTaskCoordinator_Contract_Address not found in {os.getcwd()}/.env file[/bold red]")
             exit(1)
-        console.print(f"Using DINTaskCoordinator address: {contract_address} from env variable DINTaskCoordinator_Contract_Address in {os.getcwd()}/.env")
+        console.print(f"Using DINTaskCoordinator address: {contract_address} from env variable {effective_network.upper()}_DINTaskCoordinator_Contract_Address in {os.getcwd()}/.env")
     elif task_auditor_flag:
-        contract_address = env_config.get("DINTaskAuditor_Contract_Address")
-        if not contract_address:
-            console.print("[bold red] X DINTaskAuditor_Contract_Address not found in .env file[/bold red]")
+        task_coordinator_key = f"{effective_network.upper()}_DINTaskCoordinator_Contract_Address"
+        task_coordinator_address = env_config.get(task_coordinator_key)
+
+        if not task_coordinator_address:
+            console.print(f"[bold red] X {task_coordinator_key} not found in {os.getcwd()}/.env file[/bold red]")
             exit(1)
-        console.print(f"Using DINTaskAuditor address: {contract_address} from env variable DINTaskAuditor_Contract_Address in {os.getcwd()}/.env")
+
+        contract_address = env_config.get(effective_network.upper()+"_"+task_coordinator_address+"_DINTaskAuditor_Contract_Address")
+        if not contract_address:
+            console.print(f"[bold red] X {effective_network.upper()}_{task_coordinator_address}_DINTaskAuditor_Contract_Address not found in {os.getcwd()}/.env file[/bold red]")
+            exit(1)
+        console.print(f"Using DINTaskAuditor address: {contract_address} from env variable {effective_network.upper()}_{task_coordinator_address}_DINTaskAuditor_Contract_Address in {os.getcwd()}/.env")
     
 
     # Get nonce
@@ -318,5 +329,28 @@ def add_slasher(
         
     
     
+@registry_app.command("total-models")
+def total_models(
+    network: str = typer.Option(None, "--network", help="Target network"),
+    ):
+
+
+    effective_network = resolve_network(network)
+
+    w3 = get_w3(effective_network)
+
+    dinregistry_artifact = Path(__file__).parent / "abis" / "DINModelRegistry.json"
+
+    din_info = load_din_info()
+    dinregistry_address = din_info[effective_network]["registry"]
+
+    dinregistry_contract = get_contract_instance(dinregistry_artifact, effective_network, dinregistry_address)
+
+    models_length = dinregistry_contract.functions.totalModels().call()
+
+    console.print(f"[bold green]Total models: {models_length}[/bold green]")
+    
+
+
 
     

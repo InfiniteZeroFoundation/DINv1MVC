@@ -9,7 +9,7 @@ import { HardhatRuntimeEnvironment } from "hardhat/types";
 
 
 // ✅ Import from ethers v6
-import { Wallet, HDNodeWallet  } from "ethers";
+import { Wallet, HDNodeWallet } from "ethers";
 
 interface DevAccount {
   address: string;
@@ -28,7 +28,7 @@ task("export-accounts", "Exports Hardhat default accounts")
     for (let i = 0; i < count; i++) {
       // Define the FULL absolute path for the specific child account
       const pathStr = `m/44'/60'/0'/0/${i}`;
-      
+
       // ✅ Use HDNodeWallet.fromPhrase with the full path in the third argument
       // This function internally handles generating the root node and then deriving the absolute path
       const wallet = HDNodeWallet.fromPhrase(MNEMONIC, undefined, pathStr);
@@ -65,7 +65,15 @@ if (fs.existsSync(envFile)) {
 
 
 const config: HardhatUserConfig = {
-  solidity: "0.8.28",
+  solidity: {
+    version: "0.8.28",
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 200
+      }
+    }
+  },
   networks: {
     hardhat: {
       forking: {

@@ -7,8 +7,11 @@ import torch.optim as optim
 import os
 import torch
 import torch.nn.functional as F
-from dincli.utils import CONFIG_DIR, get_w3, get_config
+from dincli.utils import CONFIG_DIR, CACHE_DIR, get_w3, get_config
 console = Console()
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 
 
 def add_noise(weights, sigma):
@@ -37,17 +40,15 @@ def train_client_model_and_upload_to_ipfs(
     account_address,
     effective_network="local",
     initial_model_ipfs_hash=None,
-    dp_mode="disabled",
-    base_path=None
+    dp_mode="disabled"
 ):
 
-    if not base_path /"model"/"genesis_model.pth".exists():
-        retrieve_from_ipfs(genesis_model_ipfs_hash,base_path/"model"/"genesis_model.pth")
+    retrieve_from_ipfs(genesis_model_ipfs_hash,CONFIG_DIR / "client"/"model"/"genesis_model.pth")
 
-        console.print("Retrieved genesis model from IPFS")
+    console.print("Retrieved genesis model from IPFS")
 
     # Step 1: Load the model architecture
-    model_architecture = torch.load(base_path / "model"/"genesis_model.pth", weights_only=False)
+    model_architecture = torch.load(CONFIG_DIR / "client"/"model"/"genesis_model.pth", weights_only=False)
     console.print("Genesis model loaded")
 
     w3 = get_w3(effective_network)
@@ -68,8 +69,6 @@ def train_client_model_and_upload_to_ipfs(
                 raise ValueError("client_addresses is empty — cannot choose a random index")
 
         # Step 2: Load the client dataset
-
-        CACHE_DIR / effective_network / "dataset" / "clients" / client_address / "data.pt"
         client_dataset = torch.load(CONFIG_DIR / "clients"/f"client_{pos}"/"data.pt", weights_only=False)
         console.print("Client dataset loaded")
 

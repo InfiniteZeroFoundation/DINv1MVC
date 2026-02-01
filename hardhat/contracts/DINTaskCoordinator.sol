@@ -29,29 +29,29 @@ interface IDINTaskAuditor {
 
 contract DINTaskCoordinator is Ownable {
     enum GIstates {
-        AwaitingDINTaskAuditorToBeSet,
-        AwaitingDINTaskCoordinatorAsSlasher,
-        AwaitingDINTaskAuditorAsSlasher,
-        AwaitingGenesisModel,
-        GenesisModelCreated,
-        GIstarted,
-        DINvalidatorRegistrationStarted,
-        DINvalidatorRegistrationClosed,
-        DINauditorRegistrationStarted,
-        DINauditorRegistrationClosed,
-        LMSstarted,
-        LMSclosed,
-        AuditorsBatchesCreated,
-        LMSevaluationStarted,
-        LMSevaluationClosed,
-        T1nT2Bcreated,
-        T1AggregationStarted,
-        T1AggregationDone,
-        T2AggregationStarted,
-        T2AggregationDone,
-        AuditorsSlashed,
-        ValidatorSlashed,
-        GIended
+        AwaitingDINTaskAuditorToBeSet, // 0
+        AwaitingDINTaskCoordinatorAsSlasher, // 1
+        AwaitingDINTaskAuditorAsSlasher, //2
+        AwaitingGenesisModel, // 3
+        GenesisModelCreated, //4
+        GIstarted, // 5
+        DINaggregatorsRegistrationStarted, //6
+        DINaggregatorsRegistrationClosed, // 7
+        DINauditorsRegistrationStarted, // 8
+        DINauditorsRegistrationClosed, // 9
+        LMSstarted, // 10
+        LMSclosed, // 11
+        AuditorsBatchesCreated, // 12
+        LMSevaluationStarted, // 13
+        LMSevaluationClosed, // 14
+        T1nT2Bcreated, // 15
+        T1AggregationStarted, // 16
+        T1AggregationDone, // 17
+        T2AggregationStarted, // 18
+        T2AggregationDone, // 19
+        AuditorsSlashed, // 20
+        AggregatorsSlashed, // 21
+        GIended // 22
     }
 
     IDinValidatorStake public dinvalidatorStakeContract;
@@ -65,18 +65,18 @@ contract DINTaskCoordinator is Ownable {
 
     uint256 public minStake = 1_000_000;
 
-    mapping(uint => address[]) public dinValidators;
+    mapping(uint => address[]) public dinAggregators;
 
-    // Track if an address is registered for a given _GI
-    mapping(uint => mapping(address => bool)) public isDINValidator;
+    // Track if an address is registered for a given _GI as an aggregator
+    mapping(uint => mapping(address => bool)) public isDINAggregator;
 
-    uint8 public constant T1_VALIDATORS_PER_BATCH = 3;
+    uint8 public constant T1_AGGREGATORS_PER_BATCH = 3;
     uint8 public constant T1_MODELS_PER_BATCH = 3;
     uint8 public constant MIN_T1_MODELS_PER_BATCH = 2;
 
     struct Tier1Batch {
         uint batchId; // Unique inside round
-        address[] validators; // Validators assigned
+        address[] aggregators; // Aggregators assigned
         uint[] modelIndexes; // Indexes into approvedModels[GI]
         bool finalized; // True after majority
         string finalCID; // Majority‐agreed CID
@@ -93,7 +93,7 @@ contract DINTaskCoordinator is Ownable {
 
     struct Tier2Batch {
         uint batchId;
-        address[] validators; // Tier‑2 validators
+        address[] aggregators; // Tier‑2 aggregators
         bool finalized;
         string finalCID;
     }
@@ -180,71 +180,72 @@ contract DINTaskCoordinator is Ownable {
         GI++;
     }
 
-    function startDINvalidatorRegistration(uint _GI) public onlyOwner {
+    function startDINaggregatorsRegistration(uint _GI) public onlyOwner {
         require(
             GIstate == GIstates.GIstarted,
-            "DINvalidator registration can not be started"
+            "DINaggregators registration can not be started"
         );
         require(_GI == GI, "Invalid GlobalIteration");
-        GIstate = GIstates.DINvalidatorRegistrationStarted;
+        GIstate = GIstates.DINaggregatorsRegistrationStarted;
     }
 
-    function registerDINvalidator(uint _GI) public {
+    function registerDINaggregator(uint _GI) public {
         require(
-            GIstate == GIstates.DINvalidatorRegistrationStarted,
-            "validators registration not open"
+            GIstate == GIstates.DINaggregatorsRegistrationStarted,
+            "aggregators registration not open"
         );
+
         uint256 stake = dinvalidatorStakeContract.getStake(msg.sender);
         require(stake >= minStake, "Insufficient stake to register");
         // Check if already registered using O(1) lookup
         require(
-            !isDINValidator[_GI][msg.sender],
+            !isDINAggregator[_GI][msg.sender],
             "Validator already registered"
         );
 
         // Add to list and mark as registered
-        dinValidators[_GI].push(msg.sender);
-        isDINValidator[_GI][msg.sender] = true;
+        dinAggregators[_GI].push(msg.sender);
+        isDINAggregator[_GI][msg.sender] = true;
 
         emit DINValidatorRegistered(_GI, msg.sender);
     }
 
-    function closeDINvalidatorRegistration(uint _GI) public onlyOwner {
+    function closeDINaggregatorsRegistration(uint _GI) public onlyOwner {
         require(
-            GIstate == GIstates.DINvalidatorRegistrationStarted,
-            "DINvalidator registration can not be finished"
+            GIstate == GIstates.DINaggregatorsRegistrationStarted,
+            "DINaggregators registration can not be finished"
         );
         require(_GI == GI, "Invalid GlobalIteration");
-        GIstate = GIstates.DINvalidatorRegistrationClosed;
+        GIstate = GIstates.DINaggregatorsRegistrationClosed;
     }
 
-    function getDINtaskValidators(
+    function getDINtaskAggregators(
         uint _GI
     ) public view returns (address[] memory) {
-        return dinValidators[_GI];
+        return dinAggregators[_GI];
     }
 
-    function startDINauditorRegistration(uint _GI) public onlyOwner {
+    function startDINauditorsRegistration(uint _GI) public onlyOwner {
         require(
-            GIstate == GIstates.DINvalidatorRegistrationClosed,
+            GIstate == GIstates.DINaggregatorsRegistrationClosed,
             "DINauditor registration can not be started"
         );
         require(_GI == GI, "Invalid GlobalIteration");
-        GIstate = GIstates.DINauditorRegistrationStarted;
+        GIstate = GIstates.DINauditorsRegistrationStarted;
     }
 
-    function closeDINauditorRegistration(uint _GI) public onlyOwner {
+    function closeDINauditorsRegistration(uint _GI) public onlyOwner {
         require(
-            GIstate == GIstates.DINauditorRegistrationStarted,
+            GIstate == GIstates.DINauditorsRegistrationStarted,
             "DINauditor registration can not be finished"
         );
         require(_GI == GI, "Invalid GlobalIteration");
-        GIstate = GIstates.DINauditorRegistrationClosed;
+        GIstate = GIstates.DINauditorsRegistrationClosed;
     }
 
     function startLMsubmissions(uint _GI) public onlyOwner {
         require(
-            GIstate == GIstates.DINauditorRegistrationClosed,
+            GIstate == GIstates.DINauditorsRegistrationClosed,
             "LM submissions can not be started"
         );
         require(_GI == GI, "Invalid GlobalIteration");
@@ -305,7 +306,7 @@ contract DINTaskCoordinator is Ownable {
     }
 
     /// @notice Build Tier‑1 and Tier‑2 batches automatically.
-    /// @dev  REQUIRES: LM evaluation closed.  Validators must already be registered in dinValidators[_GI].
+    /// @dev  REQUIRES: LM evaluation closed.  Validators must already be registered in dinAggregators[_GI].
     function autoCreateTier1AndTier2(uint _GI) external onlyOwner {
         require(
             GIstate == GIstates.LMSevaluationClosed,
@@ -314,9 +315,9 @@ contract DINTaskCoordinator is Ownable {
         require(_GI == GI, "Wrong GI");
 
         // ▸ 1. Pull and shuffle validator pool
-        address[] storage valPool = dinValidators[_GI];
+        address[] storage valPool = dinAggregators[_GI];
         uint vLen = valPool.length;
-        require(vLen >= T1_VALIDATORS_PER_BATCH, "Not enough validators");
+        require(vLen >= T1_AGGREGATORS_PER_BATCH, "Not enough validators");
         _shuffleAddressArray(valPool);
 
         // ▸ 2. Build list of approved model indexes
@@ -328,7 +329,7 @@ contract DINTaskCoordinator is Ownable {
         uint mPtr;
         uint t1cnt;
         while (
-            vPtr + T1_VALIDATORS_PER_BATCH <= valPool.length &&
+            vPtr + T1_AGGREGATORS_PER_BATCH <= valPool.length &&
             (mPtr + T1_MODELS_PER_BATCH <= modelIdx.length ||
                 (mPtr + MIN_T1_MODELS_PER_BATCH <= modelIdx.length &&
                     mPtr + T1_MODELS_PER_BATCH > modelIdx.length))
@@ -336,8 +337,8 @@ contract DINTaskCoordinator is Ownable {
             Tier1Batch storage b = tier1Batches[_GI].push();
             b.batchId = t1cnt++;
 
-            for (uint8 k = 0; k < T1_VALIDATORS_PER_BATCH; k++) {
-                b.validators.push(valPool[vPtr + k]);
+            for (uint8 k = 0; k < T1_AGGREGATORS_PER_BATCH; k++) {
+                b.aggregators.push(valPool[vPtr + k]);
             }
 
             uint modelsToAssign = T1_MODELS_PER_BATCH;
@@ -351,16 +352,16 @@ contract DINTaskCoordinator is Ownable {
 
             emit Tier1BatchAuto(_GI, b.batchId);
 
-            vPtr += T1_VALIDATORS_PER_BATCH;
+            vPtr += T1_AGGREGATORS_PER_BATCH;
             mPtr += modelsToAssign;
         }
 
-        // ▸ 4. Create Tier-2 batch with EXACTLY T1_VALIDATORS_PER_BATCH validators if enough remain
-        if (valPool.length - vPtr >= T1_VALIDATORS_PER_BATCH) {
+        // ▸ 4. Create Tier-2 batch with EXACTLY T1_AGGREGATORS_PER_BATCH validators if enough remain
+        if (valPool.length - vPtr >= T1_AGGREGATORS_PER_BATCH) {
             Tier2Batch storage t2 = tier2Batches[_GI].push();
             t2.batchId = 0;
-            for (uint8 k = 0; k < T1_VALIDATORS_PER_BATCH; k++) {
-                t2.validators.push(valPool[vPtr + k]);
+            for (uint8 k = 0; k < T1_AGGREGATORS_PER_BATCH; k++) {
+                t2.aggregators.push(valPool[vPtr + k]);
             }
 
             emit Tier2BatchAuto(_GI, t2.batchId);
@@ -427,7 +428,7 @@ contract DINTaskCoordinator is Ownable {
         Tier1Batch storage b = tier1Batches[_GI][_id];
         return (
             b.batchId,
-            b.validators,
+            b.aggregators,
             b.modelIndexes,
             b.finalized,
             b.finalCID
@@ -450,7 +451,7 @@ contract DINTaskCoordinator is Ownable {
         require(_id == 0, "Only one Tier 2 batch");
         require(_GI <= GI, "Wrong GI");
         Tier2Batch storage b = tier2Batches[_GI][_id];
-        return (b.batchId, b.validators, b.finalized, b.finalCID);
+        return (b.batchId, b.aggregators, b.finalized, b.finalCID);
     }
 
     function startT1Aggregation(uint _GI) external onlyOwner {
@@ -477,14 +478,14 @@ contract DINTaskCoordinator is Ownable {
         Tier1Batch storage b = tier1Batches[_GI][_batchId];
 
         // Verify sender is an assigned validator
-        bool isValidator = false;
-        for (uint i = 0; i < b.validators.length; i++) {
-            if (b.validators[i] == msg.sender) {
-                isValidator = true;
+        bool isAggregator = false;
+        for (uint i = 0; i < b.aggregators.length; i++) {
+            if (b.aggregators[i] == msg.sender) {
+                isAggregator = true;
                 break;
             }
         }
-        require(isValidator, "Not a batch validator");
+        require(isAggregator, "Not a batch aggregator");
 
         require(!t1Submitted[_GI][_batchId][msg.sender], "Already submitted");
 
@@ -512,11 +513,11 @@ contract DINTaskCoordinator is Ownable {
             uint maxVotes = 0;
 
             // Enumerate unique CIDs
-            for (uint j = 0; j < b.validators.length; j++) {
-                address validator = b.validators[j];
-                if (t1Submitted[_GI][b.batchId][validator]) {
+            for (uint j = 0; j < b.aggregators.length; j++) {
+                address aggregator = b.aggregators[j];
+                if (t1Submitted[_GI][b.batchId][aggregator]) {
                     string memory cid = t1SubmissionCID[_GI][b.batchId][
-                        validator
+                        aggregator
                     ];
                     uint votes = t1Votes[_GI][b.batchId][cid];
                     if (votes > maxVotes) {
@@ -558,14 +559,14 @@ contract DINTaskCoordinator is Ownable {
         Tier2Batch storage b = tier2Batches[_GI][_batchId];
 
         // Verify sender is an assigned validator
-        bool isValidator = false;
-        for (uint i = 0; i < b.validators.length; i++) {
-            if (b.validators[i] == msg.sender) {
-                isValidator = true;
+        bool isAggregator = false;
+        for (uint i = 0; i < b.aggregators.length; i++) {
+            if (b.aggregators[i] == msg.sender) {
+                isAggregator = true;
                 break;
             }
         }
-        require(isValidator, "Not a batch validator");
+        require(isAggregator, "Not a batch aggregator");
 
         require(!t2Submitted[_GI][_batchId][msg.sender], "Already submitted");
 
@@ -593,11 +594,11 @@ contract DINTaskCoordinator is Ownable {
             uint maxVotes = 0;
 
             // Enumerate unique CIDs
-            for (uint j = 0; j < b.validators.length; j++) {
-                address validator = b.validators[j];
-                if (t2Submitted[_GI][b.batchId][validator]) {
+            for (uint j = 0; j < b.aggregators.length; j++) {
+                address aggregator = b.aggregators[j];
+                if (t2Submitted[_GI][b.batchId][aggregator]) {
                     string memory cid = t2SubmissionCID[_GI][b.batchId][
-                        validator
+                        aggregator
                     ];
                     uint votes = t2Votes[_GI][b.batchId][cid];
                     if (votes > maxVotes) {
@@ -638,20 +639,20 @@ contract DINTaskCoordinator is Ownable {
         Tier1Batch[] storage t1batches = tier1Batches[_GI];
         for (uint i = 0; i < t1batches.length; i++) {
             Tier1Batch storage b = t1batches[i];
-            for (uint j = 0; j < b.validators.length; j++) {
-                address validator = b.validators[j];
+            for (uint j = 0; j < b.aggregators.length; j++) {
+                address aggregator = b.aggregators[j];
 
-                bool submitted = t1Submitted[_GI][b.batchId][validator];
+                bool submitted = t1Submitted[_GI][b.batchId][aggregator];
                 bool submittedMatching = false;
                 if (submitted) {
                     string memory cid = t1SubmissionCID[_GI][b.batchId][
-                        validator
+                        aggregator
                     ];
                     submittedMatching = (keccak256(bytes(cid)) ==
                         keccak256(bytes(b.finalCID)));
                 }
                 if (!submitted || !submittedMatching) {
-                    dinvalidatorStakeContract.slash(validator, slashAmount);
+                    dinvalidatorStakeContract.slash(aggregator, slashAmount);
                 }
             }
         }
@@ -660,25 +661,25 @@ contract DINTaskCoordinator is Ownable {
         Tier2Batch[] storage t2batches = tier2Batches[_GI];
         for (uint i = 0; i < t2batches.length; i++) {
             Tier2Batch storage b = t2batches[i];
-            for (uint j = 0; j < b.validators.length; j++) {
-                address validator = b.validators[j];
+            for (uint j = 0; j < b.aggregators.length; j++) {
+                address aggregator = b.aggregators[j];
 
-                bool submitted = t2Submitted[_GI][b.batchId][validator];
+                bool submitted = t2Submitted[_GI][b.batchId][aggregator];
                 bool submittedMatching = false;
                 if (submitted) {
                     string memory cid = t2SubmissionCID[_GI][b.batchId][
-                        validator
+                        aggregator
                     ];
                     submittedMatching = (keccak256(bytes(cid)) ==
                         keccak256(bytes(b.finalCID)));
                 }
                 if (!submitted || !submittedMatching) {
-                    dinvalidatorStakeContract.slash(validator, slashAmount);
+                    dinvalidatorStakeContract.slash(aggregator, slashAmount);
                 }
             }
         }
 
-        GIstate = GIstates.ValidatorSlashed;
+        GIstate = GIstates.AggregatorsSlashed;
     }
 
     function setTier2Score(uint _GI, uint _score) external onlyOwner {
@@ -696,7 +697,7 @@ contract DINTaskCoordinator is Ownable {
     }
 
     function endGI(uint _GI) external onlyOwner {
-        require(GIstate == GIstates.ValidatorSlashed, "Not ready to end GI");
+        require(GIstate == GIstates.AggregatorsSlashed, "Not ready to end GI");
         require(_GI == GI, "Wrong GI");
         GIstate = GIstates.GIended;
     }

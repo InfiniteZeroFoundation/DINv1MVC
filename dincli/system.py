@@ -154,10 +154,11 @@ def initialize():
         CONFIG_FILE.write_text("{}\n", encoding="utf-8")
         console.print(f"[green]✅ Created empty config file at: {CONFIG_FILE}[/green]")
 
-@app.command()
+@app.command("buy-usdt")
 def buy_usdt(
     amount: float = typer.Argument(..., help="Amount of USDT to buy"),
-    network: str = typer.Option(None, "--network", help="Target network (local|sepolia|mainnet)")
+    network: str = typer.Option(None, "--network", help="Target network (local|sepolia|mainnet)"),
+    yes: bool = typer.Option(False, "--yes", help="Skip confirmation prompt"),
 ):
     """
     Buy USDT tokens by swapping ETH via Uniswap.
@@ -252,15 +253,20 @@ def buy_usdt(
     # Wait for confirmation with timeout
     deadline = datetime.now() + timedelta(seconds=60)
     confirmed = None
-    while datetime.now() < deadline:
-        try:
-            confirmed = Confirm.ask(f"Confirm swap of ~{eth_required:.6f} ETH for {amount} USDT?")
-            break
-        except KeyboardInterrupt:
-            print("\n[red]Cancelled by user.[/red]")
-            raise typer.Exit(1)
-        except Exception:
-            time.sleep(0.5)  # brief pause before retrying input
+    if yes:
+        confirmed = True
+        print("[green]Skipping confirmation prompt.[/green]")
+        print(f"Swapping...{eth_required:.6f} ETH for {amount} USDT")
+    else:
+        while datetime.now() < deadline:
+            try:
+                confirmed = Confirm.ask(f"Confirm swap of ~{eth_required:.6f} ETH for {amount} USDT?")
+                break
+            except KeyboardInterrupt:
+                print("\n[red]Cancelled by user.[/red]")
+                raise typer.Exit(1)
+            except Exception:
+                time.sleep(0.5)  # brief pause before retrying input
 
     if confirmed is not True:
         print("[red]Confirmation timeout or declined. Aborting.[/red]")
@@ -617,7 +623,14 @@ def reset_all(
 
 
 @app.command("todo")
-def todo():
+def todo(
+    network: str = typer.Option("local", "--network", "-n", help="Network to use"),
+    client: bool = typer.Option(False, "--client", "-cl", help="todo as client"),
+    aggregator: bool = typer.Option(False, "--aggregator", "-ag", help="todo as aggregator"),
+    auditor: bool = typer.Option(False, "--auditor", "-au", help="todo as auditor"),
+    model_owner: bool = typer.Option(False, "--model-owner", "-mo", help="todo as model owner"),
+    model_id: str = typer.Option(None, "--model-id", "-m", help="Model ID"),
+):
     typer.secho("TODO list:", fg=typer.colors.CYAN)
 
     if not CONFIG_DIR.exists():
@@ -711,31 +724,71 @@ def todo():
     else:
         console.print(f"[green]✅ IPFS API RETRIEVE URL found in environment variable: IPFS_API_URL_RETRIEVE in {cwd}/.env file with value: {get_env_key('IPFS_API_URL_RETRIEVE')}[/green]")    
     
+    effective_network = resolve_network(network)
+    account = load_account()
+    if client:
+        if not model_id:
+            console.print("[red]❌ Model ID not found in config file or cli argument.[/red]")
+            raise typer.Exit(1)
+        client_path =  Path(CACHE_DIR)/effective_network.lower()/ f"model_{model_id}"/ "dataset"/ "clients"/ account.address/ "data.pt"
+        if client_path.exists():
+            console.print(f"[green]✅ Client dataset found at: {client_path}[/green]")
+        else:
+            console.print(f"[red]❌ Client dataset not found at: {client_path}[/red]")
+                
+
+
+            
+
     
 
-@dataset_app.command()
+
+
+@dataset_app.command("distribute-mnist")
 def distribute_mnist(
-    clients: int = typer.Option(..., "--clients", "-c", help="Number of clients"),
-    seed: int = typer.Option(42, "--seed", "-s", help="Random seed")
+    num_clients: int = typer.Option(None, "--num-clients", "-nc", help="Number of clients"),
+    seed: int = typer.Option(42, "--seed", "-s", help="Random seed"),
+    network: str = typer.Option("local", "--network", "-n", help="Network to use"),
+    test: bool = typer.Option(False, "--test", "-t", help="get test dataset"),
+    clients: bool = typer.Option(False, "--clients", "-cl", help="get clients dataset"),
+    task_coordinator_address: str = typer.Option(None, "--task_coordinator", "-tc", help="TaskCoordinator address"),
+    model_id: str = typer.Option(None, "--model-id", "-m", help="Model ID"),
+
 ):
     """
     Download MNIST and distribute it across N clients (IID split).
-    Saves data under CONFIG_DIR/clients/client_i/data.pt
     """
 
-    if clients <= 0:
-        print("[red]Number of clients must be >= 1[/red]")
-        raise typer.Exit(1)
+    effective_network = resolve_network(network)
 
-    base_dir = CONFIG_DIR
+    if not task_coordinator_address:
+        task_coordinator_address = get_env_key(effective_network.upper() + "_DINTaskCoordinator_Contract_Address")
+        if not task_coordinator_address:
+            console.print(f"[bold red] X {effective_network.upper()}_DINTaskCoordinator_Contract_Address not found in {os.getcwd()}/.env file[/bold red]")
+            raise typer.Exit(1)
+    
+
+    if clients and num_clients <= 0:
+        console.print("[red]Number of clients must be >= 1[/red]")
+        raise typer.Exit(1)
+    if clients and num_clients > 10:
+        console.print("[red]Number of clients must be < 10[/red]")
+        raise typer.Exit(1)
+    
+    if model_id:
+        base_dir = Path(CACHE_DIR)/effective_network.lower()/ f"model_{model_id}"
+    else:
+        base_dir = Path(os.getcwd())/"tasks"/effective_network.lower()/task_coordinator_address   
     dataset_dir = base_dir / "dataset"
-    clients_dir = base_dir / "clients"
+    clients_dir = base_dir / "dataset" / "clients"
 
     # Ensure directories exist
-    dataset_dir.mkdir(parents=True, exist_ok=True)
-    clients_dir.mkdir(parents=True, exist_ok=True)
+    if test:
+        dataset_dir.mkdir(parents=True, exist_ok=True)
+    if clients:
+        clients_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"[cyan]Using config dir:[/cyan] {base_dir}")
+    print(f"[cyan]Using dir:[/cyan] {base_dir}")
 
     transform = transforms.Compose([
         transforms.ToTensor(),
@@ -750,33 +803,41 @@ def distribute_mnist(
     (dataset_dir / "train").mkdir(exist_ok=True)
     (dataset_dir / "test").mkdir(exist_ok=True)
 
-    torch.save(train_dataset, dataset_dir / "train/train_dataset.pt")
-    torch.save(test_dataset, dataset_dir / "test/test_dataset.pt")
+    if test:
+        torch.save(train_dataset, dataset_dir / "train/train_dataset.pt")
+        torch.save(test_dataset, dataset_dir / "test/test_dataset.pt")
+        console.print(f"[green]Processed Datasets saved successfully to {dataset_dir}![/green]")
+    if clients:
+        # IID SPLIT
+        total_samples = len(train_dataset)
+        indices = np.arange(total_samples)
 
-    print(f"[green]Processed Datasets saved successfully to {dataset_dir}![/green]")
+        np.random.seed(seed)
+        np.random.shuffle(indices)
 
-    # IID SPLIT
-    total_samples = len(train_dataset)
-    indices = np.arange(total_samples)
+        partitions = np.array_split(indices, num_clients)
 
-    np.random.seed(seed)
-    np.random.shuffle(indices)
+        accounts_list = []
 
-    partitions = np.array_split(indices, clients)
+        for i in range(num_clients):
+            private_key = get_demo_private_key(i+2)
+            acct = Account.from_key(private_key)
+            accounts_list.append(acct.address)
 
-    for i, idxs in enumerate(partitions):
-        client_path = clients_dir / f"client_{i}"
-        client_path.mkdir(parents=True, exist_ok=True)
 
-        # Extract subset
-        subset_data = [(train_dataset[idx][0], train_dataset[idx][1]) for idx in idxs]
+        for i, idxs in enumerate(partitions):
+            client_path = clients_dir / accounts_list[i]
+            client_path.mkdir(parents=True, exist_ok=True)
 
-        save_path = client_path / "data.pt"
-        torch.save(subset_data, save_path)
+            # Extract subset
+            subset_data = [(train_dataset[idx][0], train_dataset[idx][1]) for idx in idxs]
 
-        print(f"[green]Saved client_{i} ({len(subset_data)} samples) → {save_path}[/green]")
+            save_path = client_path / "data.pt"
+            torch.save(subset_data, save_path)
 
-    print(f"[bold green]✅ MNIST distributed to {clients} clients under {clients_dir}[/bold green]")
+            console.print(f"[green]Saved client_{i} ({len(subset_data)} samples) → {save_path}[/green]")
+
+        console.print(f"[bold green]✅ MNIST distributed to {num_clients} clients under {clients_dir}[/bold green]")
     
 @app.command()
 def dump_abi(

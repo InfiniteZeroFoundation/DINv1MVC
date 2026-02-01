@@ -67,11 +67,11 @@
         {
           "indexed": false,
           "internalType": "string",
-          "name": "newManifestoCID",
+          "name": "newManifestCID",
           "type": "string"
         }
       ],
-      "name": "ManifestoUpdated",
+      "name": "ManifestUpdated",
       "type": "event"
     },
     {
@@ -98,7 +98,7 @@
         {
           "indexed": false,
           "internalType": "string",
-          "name": "manifestoCID",
+          "name": "manifestCID",
           "type": "string"
         }
       ],
@@ -173,6 +173,16 @@
           "internalType": "uint256",
           "name": "createdAt",
           "type": "uint256"
+        },
+        {
+          "internalType": "address",
+          "name": "taskCoordinator",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "taskAuditor",
+          "type": "address"
         }
       ],
       "stateMutability": "view",
@@ -243,7 +253,7 @@
       "inputs": [
         {
           "internalType": "string",
-          "name": "manifestoCID",
+          "name": "manifestCID",
           "type": "string"
         },
         {
@@ -308,11 +318,11 @@
         },
         {
           "internalType": "string",
-          "name": "newManifestoCID",
+          "name": "newManifestCID",
           "type": "string"
         }
       ],
-      "name": "updateManifesto",
+      "name": "updateManifest",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"

@@ -20,35 +20,42 @@ def initialize_weights(m):
         if m.bias is not None:
             init.zeros_(m.bias)  
 
-def getGenesisModelIpfs():
+def getGenesisModelIpfs(base_path):
     model = ModelArchitecture()
     
     #initialize model
     model.apply(initialize_weights)
     
     # Save the trained genesis model to disk
-    os.makedirs(CONFIG_DIR / "modelowner"/"models", exist_ok=True)
-    torch.save(model, CONFIG_DIR / "modelowner"/"models"/"genesis_model.pth")
+    model_dir = Path(base_path/"models")
+    os.makedirs(model_dir, exist_ok=True)
+    model_path = model_dir / "genesis_model.pth"
+    torch.save(model, str(model_path))
+
+    print("saving genesis model at " + str(model_path))
     
     # Upload the model to IPFS
-    model_hash = upload_to_ipfs(CONFIG_DIR / "modelowner"/"models"/"genesis_model.pth", "Genesis model")
+    model_hash = upload_to_ipfs(str(model_path), "Genesis model")
     return model_hash
 
 
-def getscoreforGM(gi: int, gmcid: str):
+def getscoreforGM(gi: int, gmcid: str, base_path):
     try:
-        os.makedirs(CONFIG_DIR / "dataset"/"test", exist_ok=True)
-        testdata = torch.load(CONFIG_DIR / "dataset"/"test"/"test_dataset.pt", weights_only=False)
+        os.makedirs(base_path / "dataset"/"test", exist_ok=True)
+        if not os.path.exists(base_path / "dataset"/"test"/"test_dataset.pt"):
+            print("test dataset not found at " + str(base_path / "dataset"/"test"/"test_dataset.pt"))
+            return
+        testdata = torch.load(base_path / "dataset"/"test"/"test_dataset.pt", weights_only=False)
         
-        model_architecture = torch.load(CONFIG_DIR / "modelowner"/"models"/"genesis_model.pth", weights_only=False)
+        model_architecture = torch.load(base_path /"models"/"genesis_model.pth", weights_only=False)
         
-        retrieve_from_ipfs(gmcid, CONFIG_DIR / "modelowner"/"models"/ f"gm_{gi}.pt")
+        retrieve_from_ipfs(gmcid, base_path / "models"/ f"gm_{gi}.pt")
         
         if gi ==0 :
-            temp_model = torch.load(CONFIG_DIR / "modelowner"/"models"/ f"gm_{gi}.pt", weights_only=False)
+            temp_model = torch.load(base_path / "models"/ f"gm_{gi}.pt", weights_only=False)
             gm_weights = temp_model.state_dict()
         else:
-            gm_weights = torch.load(CONFIG_DIR / "modelowner"/"models"/f"gm_{gi}.pt", weights_only=True)
+            gm_weights = torch.load(base_path / "models"/f"gm_{gi}.pt", weights_only=True)
         
         model_architecture.load_state_dict(gm_weights)
         

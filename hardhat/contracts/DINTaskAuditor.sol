@@ -5,21 +5,17 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-
-
-
-
 enum GIstates {
     AwaitingDINTaskAuditorToBeSet, // 0
     AwaitingDINTaskCoordinatorAsSlasher, // 1
     AwaitingDINTaskAuditorAsSlasher, //2
     AwaitingGenesisModel, // 3
-    GenesisModelCreated,//4
+    GenesisModelCreated, //4
     GIstarted, // 5
-    DINvalidatorRegistrationStarted, //6
-    DINvalidatorRegistrationClosed,// 7
-    DINauditorRegistrationStarted,// 8
-    DINauditorRegistrationClosed, // 9
+    DINaggregatorsRegistrationStarted, //6
+    DINaggregatorsRegistrationClosed, // 7
+    DINauditorsRegistrationStarted, // 8
+    DINauditorsRegistrationClosed, // 9
     LMSstarted, // 10
     LMSclosed, // 11
     AuditorsBatchesCreated, // 12
@@ -31,24 +27,23 @@ enum GIstates {
     T2AggregationStarted, // 18
     T2AggregationDone, // 19
     AuditorsSlashed, // 20
-    ValidatorSlashed, // 21
+    AggregatorsSlashed, // 21
     GIended // 22
 }
 
-
 interface IDinValidatorStake {
     function getStake(address validator) external view returns (uint256);
+
     function slash(address validator, uint256 amount) external;
 }
 
-
 interface IDINTaskCoordinator {
     function GI() external view returns (uint256);
+
     function GIstate() external view returns (uint8); // or an enum getter
 }
 
 contract DINTaskAuditor is Ownable {
-
     using SafeERC20 for IERC20;
     IERC20 public mockusdt;
 
@@ -67,81 +62,64 @@ contract DINTaskAuditor is Ownable {
     // Track if an address is registered for a given _GI
     mapping(uint => mapping(address => bool)) public isRegisteredAuditor;
 
-
     struct LMSubmission {
         address client;
-        string  modelCID;
-        uint40  submittedAt;
-        bool    eligible;        // majority vote result (basic conformance)
-        bool    evaluated;       // scoring quorum reached & avg computed
-        bool    approved;        // approvedForAggregation (avg >= passScore)
-        uint8   finalAvgScore;   // 0..100, signed for future expansions
+        string modelCID;
+        uint40 submittedAt;
+        bool eligible; // majority vote result (basic conformance)
+        bool evaluated; // scoring quorum reached & avg computed
+        bool approved; // approvedForAggregation (avg >= passScore)
+        uint8 finalAvgScore; // 0..100, signed for future expansions
     }
-
 
     // Per-round params (tune for demo vs spec)
     struct Params {
-        uint8  auditorsPerBatch;   // demo: 3, spec: 10
-        uint8  modelsPerBatch;       // demo: 3, spec: 100
-        uint8  minEligibilityQuorum; // e.g., 2 for demo, 7 for spec(≈2/3)
-        uint8  minScoreQuorum;       // e.g., 2 for demo, 7 for spec
-        uint8  passScore;            // 0..100
-        uint256 minAuditorStake;     // eligibility for auditors
+        uint8 auditorsPerBatch; // demo: 3, spec: 10
+        uint8 modelsPerBatch; // demo: 3, spec: 100
+        uint8 minEligibilityQuorum; // e.g., 2 for demo, 7 for spec(≈2/3)
+        uint8 minScoreQuorum; // e.g., 2 for demo, 7 for spec
+        uint8 passScore; // 0..100
+        uint256 minAuditorStake; // eligibility for auditors
         uint256 MIN_MODELS_PER_BATCH;
     }
 
     Params public params;
 
-
     mapping(uint => LMSubmission[]) public lmSubmissions;
 
     ///  GI  ➜  submitter  ➜  bool
     mapping(uint => mapping(address => bool)) public clientHasSubmitted;
+    mapping(uint => mapping(address => uint)) public clientSubmissionIndex;
 
     struct AuditBatch {
         uint batchId;
         address[] auditors;
         uint[] modelIndexes;
-        string  testDataCID;    // shared test data for this batch
+        string testDataCID; // shared test data for this batch
     }
 
     mapping(uint8 => AuditBatch[]) public auditBatches;
 
+    mapping(uint8 => mapping(uint => mapping(address => mapping(uint => uint8)))) // GI // batchId // auditor // modelIndex // score
+        public auditScores;
 
-    mapping(uint8 =>                   // GI
-        mapping(uint =>                  // batchId
-            mapping(address =>           // auditor
-                mapping(uint =>          // modelIndex
-                    uint8               // score
-                )
-            )
-        )
-    ) public auditScores;
+    mapping(uint8 => mapping(uint => mapping(address => mapping(uint => bool)))) // GI // batchId // auditor // modelIndex // eligible
+        public LMeligibleVote;
 
-    mapping(uint8 =>                   // GI
-        mapping(uint =>                  // batchId
-            mapping(address =>           // auditor
-                mapping(uint =>          // modelIndex
-                    bool               // eligible
-                )
-            )
-        )
-    ) public LMeligibleVote;
-
-    mapping(uint256 =>                   // GI
-        mapping(uint =>                  // batchId
-            mapping(address =>           // auditor
-                mapping(uint =>          // modelIndex
-                    bool                 // has voted
-                )
-            )
-        )
-    ) public hasAuditedLM;
+    mapping(uint256 => mapping(uint => mapping(address => mapping(uint => bool)))) // GI // batchId // auditor // modelIndex // has voted
+        public hasAuditedLM;
 
     mapping(uint8 => bool) public Is_testdataCIDs_Assigned;
-    modifier onlyAssignedAuditor(uint8 gi, uint batchId, uint modelIndex) {
+    modifier onlyAssignedAuditor(
+        uint8 gi,
+        uint batchId,
+        uint modelIndex
+    ) {
         // Get the batch
-        require(batchId < auditBatches[gi].length, "AuditBatch: Batch does not exist");
+        require(
+            batchId < auditBatches[gi].length,
+            "AuditBatch: Batch does not exist"
+        );
 
         AuditBatch storage batch = auditBatches[gi][batchId];
 
@@ -168,14 +146,11 @@ contract DINTaskAuditor is Ownable {
         _;
     }
 
-
-
     event RewardDeposited(address indexed modelOwner, uint256 amount);
 
     event DINAuditorRegistered(uint indexed GI, address indexed auditor);
 
-
-        event AuditScoreSubmitted(
+    event AuditScoreSubmitted(
         uint256 indexed gi,
         uint indexed batchId,
         address indexed auditor,
@@ -187,7 +162,7 @@ contract DINTaskAuditor is Ownable {
         uint256 indexed gi,
         uint indexed batchId,
         uint indexed modelIndex,
-        address auditor,    
+        address auditor,
         bool vote
     );
 
@@ -195,25 +170,37 @@ contract DINTaskAuditor is Ownable {
         uint256 indexed gi,
         uint indexed batchId,
         uint indexed modelIndex,
-        bool eligible,        
-        uint totalVotes       
+        bool eligible,
+        uint totalVotes
     ); // eligible: final eligibility decision, totalVotes: number of auditors who voted
 
     event AuditorsBatchAuto(uint indexed GI, uint indexed batchId);
     event AuditorsBatchesCreated(uint indexed GI, uint batchCount);
     event PassScoreUpdated(uint8 oldScore, uint8 newScore);
 
-
-
-    constructor(address _mockusdt, address _dinvalidatorStakeContract_address, address _dintaskcoordinator_contract_address) Ownable(msg.sender) {
+    constructor(
+        address _mockusdt,
+        address _dinvalidatorStakeContract_address,
+        address _dintaskcoordinator_contract_address
+    ) Ownable(msg.sender) {
         mockusdt = IERC20(_mockusdt);
-        dinvalidatorStakeContract = IDinValidatorStake(_dinvalidatorStakeContract_address);
-        dintaskcoordinatorContract = IDINTaskCoordinator(_dintaskcoordinator_contract_address);
+        dinvalidatorStakeContract = IDinValidatorStake(
+            _dinvalidatorStakeContract_address
+        );
+        dintaskcoordinatorContract = IDINTaskCoordinator(
+            _dintaskcoordinator_contract_address
+        );
 
-        params = Params({auditorsPerBatch: 3, modelsPerBatch: 3, minEligibilityQuorum: 2, minScoreQuorum: 2, passScore: 50, minAuditorStake: 1_000_000, MIN_MODELS_PER_BATCH: 2});
-    
+        params = Params({
+            auditorsPerBatch: 3,
+            modelsPerBatch: 3,
+            minEligibilityQuorum: 2,
+            minScoreQuorum: 2,
+            passScore: 50,
+            minAuditorStake: 1_000_000,
+            MIN_MODELS_PER_BATCH: 2
+        });
     }
-
 
     function depositReward(uint _amount) public onlyOwner {
         require(_amount > 0, "Amount must be greater than 0");
@@ -223,7 +210,6 @@ contract DINTaskAuditor is Ownable {
         totalDepositedRewards += _amount;
         emit RewardDeposited(msg.sender, _amount);
     }
-
 
     function updatePassScore(uint8 newPassScore) external onlyTaskCoordinator {
         require(newPassScore <= 100, "Pass score must be between 0 and 100");
@@ -235,9 +221,19 @@ contract DINTaskAuditor is Ownable {
     }
 
     function registerDINAuditor(uint _GI) public {
-        require(dintaskcoordinatorContract.GIstate() == uint8(GIstates.DINauditorRegistrationStarted), "DINauditor registration not open");
-        require(_GI == dintaskcoordinatorContract.GI(), "Invalid GlobalIteration");
-        require(!isRegisteredAuditor[_GI][msg.sender], "Auditor already registered");
+        require(
+            dintaskcoordinatorContract.GIstate() ==
+                uint8(GIstates.DINauditorsRegistrationStarted),
+            "DINauditor registration not open"
+        );
+        require(
+            _GI == dintaskcoordinatorContract.GI(),
+            "Invalid GlobalIteration"
+        );
+        require(
+            !isRegisteredAuditor[_GI][msg.sender],
+            "Auditor already registered"
+        );
         uint256 stake = dinvalidatorStakeContract.getStake(msg.sender);
         require(stake >= minStake, "Insufficient stake to register");
 
@@ -245,64 +241,88 @@ contract DINTaskAuditor is Ownable {
         isRegisteredAuditor[_GI][msg.sender] = true;
 
         emit DINAuditorRegistered(_GI, msg.sender);
-
     }
 
-    function getDINtaskAuditors(uint _GI) public view returns (address[] memory) {
+    function getDINtaskAuditors(
+        uint _GI
+    ) public view returns (address[] memory) {
         return dinAuditors[_GI];
     }
 
-
     function submitLocalModel(string memory _clientModel, uint _GI) public {
         require(_GI == dintaskcoordinatorContract.GI(), "Invalid GI");
-        require(dintaskcoordinatorContract.GIstate() == uint8(GIstates.LMSstarted), "LM Submissions not open");
+        require(
+            dintaskcoordinatorContract.GIstate() == uint8(GIstates.LMSstarted),
+            "LM Submissions not open"
+        );
         require(!clientHasSubmitted[_GI][msg.sender], "Already submitted");
-        require(lmSubmissions[_GI].length < MAX_LM_SUBMISSIONS, "Max LM submissions reached");
+        require(
+            lmSubmissions[_GI].length < MAX_LM_SUBMISSIONS,
+            "Max LM submissions reached"
+        );
 
-        lmSubmissions[_GI].push(LMSubmission({
-            client:    msg.sender,
-            modelCID:  _clientModel,
-            evaluated: false,
-            approved:  false,
-            eligible:  false,
-            finalAvgScore: 0,
-            submittedAt: uint40(block.timestamp)
-        }));
+        uint modelIndex = lmSubmissions[_GI].length;
+        clientSubmissionIndex[_GI][msg.sender] = modelIndex;
+
+        lmSubmissions[_GI].push(
+            LMSubmission({
+                client: msg.sender,
+                modelCID: _clientModel,
+                evaluated: false,
+                approved: false,
+                eligible: false,
+                finalAvgScore: 0,
+                submittedAt: uint40(block.timestamp)
+            })
+        );
         clientHasSubmitted[_GI][msg.sender] = true;
     }
 
-    function getClientModels(uint _GI) public view returns (LMSubmission[] memory) {
+    function getClientModels(
+        uint _GI
+    ) public view returns (LMSubmission[] memory) {
         return lmSubmissions[_GI];
     }
 
-
-    modifier onlyTaskCoordinator(){
-        require(msg.sender == address(dintaskcoordinatorContract), "DINTaskAuditor: Not task coordinator");
+    modifier onlyTaskCoordinator() {
+        require(
+            msg.sender == address(dintaskcoordinatorContract),
+            "DINTaskAuditor: Not task coordinator"
+        );
         _;
-        
     }
-
 
     // ──────────── internal shuffle helpers ────────────
     function _shuffleAddressArray(address[] storage arr) internal {
         for (uint i = arr.length - 1; i > 0; i--) {
-            uint j = uint(keccak256(abi.encodePacked(blockhash(block.number-1), i, arr.length))) % (i + 1);
+            uint j = uint(
+                keccak256(
+                    abi.encodePacked(blockhash(block.number - 1), i, arr.length)
+                )
+            ) % (i + 1);
             (arr[i], arr[j]) = (arr[j], arr[i]);
         }
     }
 
     function _shuffleUintArray(uint[] memory arr) internal view {
         for (uint i = arr.length - 1; i > 0; i--) {
-            uint j = uint(keccak256(abi.encodePacked(block.timestamp, i, arr.length, msg.sender))) % (i + 1);
+            uint j = uint(
+                keccak256(
+                    abi.encodePacked(block.timestamp, i, arr.length, msg.sender)
+                )
+            ) % (i + 1);
             (arr[i], arr[j]) = (arr[j], arr[i]);
         }
     }
 
-
-    function createAuditorsBatches(uint _GI) external onlyTaskCoordinator returns (bool) {
+    function createAuditorsBatches(
+        uint _GI
+    ) external onlyTaskCoordinator returns (bool) {
         require(_GI == dintaskcoordinatorContract.GI(), "Invalid GI");
-        require(dintaskcoordinatorContract.GIstate() == uint8(GIstates.LMSclosed), "can not create Auditors batches now");
-
+        require(
+            dintaskcoordinatorContract.GIstate() == uint8(GIstates.LMSclosed),
+            "can not create Auditors batches now"
+        );
 
         // ▸ 1. Pull and shuffle auditor pool
         address[] storage auditorPool = dinAuditors[_GI];
@@ -320,7 +340,6 @@ contract DINTaskAuditor is Ownable {
         }
         _shuffleUintArray(modelIdx);
 
-
         // ▸ 3. Create batches, Greedily fill Auditors batches
         uint vPtr;
         uint mPtr;
@@ -328,13 +347,9 @@ contract DINTaskAuditor is Ownable {
 
         while (
             vPtr + params.auditorsPerBatch <= auditorPool.length &&
-            (
-                mPtr + params.modelsPerBatch <= modelIdx.length ||
-                (
-                    mPtr + params.MIN_MODELS_PER_BATCH <= modelIdx.length &&
-                    mPtr + params.modelsPerBatch > modelIdx.length
-                )
-            )
+            (mPtr + params.modelsPerBatch <= modelIdx.length ||
+                (mPtr + params.MIN_MODELS_PER_BATCH <= modelIdx.length &&
+                    mPtr + params.modelsPerBatch > modelIdx.length))
         ) {
             AuditBatch storage b = auditBatches[uint8(_GI)].push();
             b.batchId = Batchcnt++;
@@ -352,21 +367,14 @@ contract DINTaskAuditor is Ownable {
                 b.modelIndexes.push(modelIdx[mPtr + k]);
             }
 
-            
-
-            emit AuditorsBatchAuto(
-                _GI,
-                b.batchId
-            );
+            emit AuditorsBatchAuto(_GI, b.batchId);
 
             vPtr += params.auditorsPerBatch;
             mPtr += modelsToAssign;
         }
 
-
         emit AuditorsBatchesCreated(_GI, Batchcnt);
         return true;
-        
     }
 
     function AuditorsBatchCount(uint _GI) external view returns (uint) {
@@ -374,16 +382,28 @@ contract DINTaskAuditor is Ownable {
         return auditBatches[uint8(_GI)].length;
     }
 
-    function getAuditorsBatch(uint _GI, uint _batchId) external view returns (
-        uint      batchId,
-        address[] memory auditors,
-        uint[]    memory modelIndexes,
-        string    memory testDataCID
-    ) {
+    function getAuditorsBatch(
+        uint _GI,
+        uint _batchId
+    )
+        external
+        view
+        returns (
+            uint batchId,
+            address[] memory auditors,
+            uint[] memory modelIndexes,
+            string memory testDataCID
+        )
+    {
         require(_GI <= dintaskcoordinatorContract.GI(), "Wrong GI");
         require(_batchId < auditBatches[uint8(_GI)].length, "Batch not found");
         AuditBatch memory batch = auditBatches[uint8(_GI)][_batchId];
-        return (batch.batchId, batch.auditors, batch.modelIndexes, batch.testDataCID);
+        return (
+            batch.batchId,
+            batch.auditors,
+            batch.modelIndexes,
+            batch.testDataCID
+        );
     }
 
     function assignAuditTestDataset(
@@ -395,24 +415,40 @@ contract DINTaskAuditor is Ownable {
         // Ensure the batch exists
         require(batchId < auditBatches[gi].length, "Batch does not exist");
 
-        require(auditBatches[gi][batchId].batchId == batchId, "Batch ID mismatch");
+        require(
+            auditBatches[gi][batchId].batchId == batchId,
+            "Batch ID mismatch"
+        );
 
         // Assign the testDataCID
         auditBatches[gi][batchId].testDataCID = testDataCID;
-
     }
 
-    function setTestDataAssignedFlag ( uint _GI, bool flag ) external onlyTaskCoordinator returns (bool){
+    function setTestDataAssignedFlag(
+        uint _GI,
+        bool flag
+    ) external onlyTaskCoordinator returns (bool) {
         require(_GI == dintaskcoordinatorContract.GI(), "Wrong GI");
-        require(dintaskcoordinatorContract.GIstate() == uint8(GIstates.AuditorsBatchesCreated), "TA: can not set TestDataAssignedFlag");
+        require(
+            dintaskcoordinatorContract.GIstate() ==
+                uint8(GIstates.AuditorsBatchesCreated),
+            "TA: can not set TestDataAssignedFlag"
+        );
         require(flag == true, "Flag must be true");
-        require(Is_testdataCIDs_Assigned[uint8(_GI)] == false, "Flag already set");
+        require(
+            Is_testdataCIDs_Assigned[uint8(_GI)] == false,
+            "Flag already set"
+        );
 
         Is_testdataCIDs_Assigned[uint8(_GI)] = flag;
         return true;
     }
 
-        function _tryFinalizeEligibility(uint8 gi, uint batchId, uint modelIndex) internal {
+    function _tryFinalizeEligibility(
+        uint8 gi,
+        uint batchId,
+        uint modelIndex
+    ) internal {
         // Ensure batch exists
         require(batchId < auditBatches[gi].length, "Batch not found");
         AuditBatch storage batch = auditBatches[gi][batchId];
@@ -447,8 +483,8 @@ contract DINTaskAuditor is Ownable {
         }
 
         // Majority rule: eligible if yesVotes > 50% of total votes
-        
-        bool majorityEligible = (yesVotes ) >= params.minEligibilityQuorum; 
+
+        bool majorityEligible = (yesVotes) >= params.minEligibilityQuorum;
 
         // Optional: make threshold configurable
         // bool majorityEligible = (yesVotes * 100) >= (totalVotes * params.eligibilityThreshold);
@@ -456,7 +492,13 @@ contract DINTaskAuditor is Ownable {
         // Finalize the result
         submission.eligible = majorityEligible;
 
-        emit EligibilityFinalized(gi, batchId, modelIndex, majorityEligible, totalVotes);
+        emit EligibilityFinalized(
+            gi,
+            batchId,
+            modelIndex,
+            majorityEligible,
+            totalVotes
+        );
     }
 
     function setAuditScorenEligibility(
@@ -464,13 +506,20 @@ contract DINTaskAuditor is Ownable {
         uint batchId,
         uint modelIndex,
         uint8 score,
-        bool vote  // true = eligible, false = not eligible
+        bool vote // true = eligible, false = not eligible
     ) public onlyAssignedAuditor(gi, batchId, modelIndex) {
         require(gi == dintaskcoordinatorContract.GI(), "Wrong GI");
-        require(dintaskcoordinatorContract.GIstate() == uint8(GIstates.LMSevaluationStarted), "TA: can not set AuditScorenEligibility");
+        require(
+            dintaskcoordinatorContract.GIstate() ==
+                uint8(GIstates.LMSevaluationStarted),
+            "TA: can not set AuditScorenEligibility"
+        );
         // Score reasonable? (e.g., 0–100)
         require(score <= 100, "Audit: Score must be <= 100");
-        require(hasAuditedLM[gi][batchId][msg.sender][modelIndex] == false, "Audit: Already voted");
+        require(
+            hasAuditedLM[gi][batchId][msg.sender][modelIndex] == false,
+            "Audit: Already voted"
+        );
 
         auditScores[gi][batchId][msg.sender][modelIndex] = score;
         // Record the vote
@@ -485,12 +534,13 @@ contract DINTaskAuditor is Ownable {
         _tryFinalizeEligibility(gi, batchId, modelIndex);
     }
 
-    
-
-    function finalizeEvaluation(uint _GI) public onlyTaskCoordinator returns (bool) {
+    function finalizeEvaluation(
+        uint _GI
+    ) public onlyTaskCoordinator returns (bool) {
         require(_GI == dintaskcoordinatorContract.GI(), "Wrong GI");
         require(
-            dintaskcoordinatorContract.GIstate() == uint8(GIstates.LMSevaluationStarted),
+            dintaskcoordinatorContract.GIstate() ==
+                uint8(GIstates.LMSevaluationStarted),
             "TA: can not finalize Evaluation"
         );
 
@@ -535,7 +585,7 @@ contract DINTaskAuditor is Ownable {
                     uint8 avg = uint8(sum / votes); // integer division
 
                     sub.finalAvgScore = avg;
-                    sub.evaluated     = true;
+                    sub.evaluated = true;
 
                     // Approval requires (i) eligible == true and (ii) avg >= passScore
                     sub.approved = (sub.eligible && avg >= params.passScore);
@@ -549,7 +599,9 @@ contract DINTaskAuditor is Ownable {
         return finalizedCount > 0;
     }
 
-    function approvedModelIndexes(uint _GI) public view returns (uint[] memory) {
+    function approvedModelIndexes(
+        uint _GI
+    ) public view returns (uint[] memory) {
         LMSubmission[] storage list = lmSubmissions[_GI];
         uint count;
         for (uint i = 0; i < list.length; i++) {
@@ -562,19 +614,4 @@ contract DINTaskAuditor is Ownable {
         }
         return out;
     }
-
-
-
-
-
-
-
-
-
-
-
-
-        
-
-
 }
