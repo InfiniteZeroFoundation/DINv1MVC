@@ -66,12 +66,25 @@ This project consists of multiple components.
    dincli system configure-logging --level info
    ```
 
+# Sample manifest_CID
+QmQaPUfVAyQBrkRvHZWyH8tbNukmcgEmghYFGZA6LKo8tp
 
+# cp 
 
+cp /home/azureuser/.cache/dincli/local/model_0/manifest.json /home/azureuser/projects/DINv1MVC/cache_model_0/manifest.json
 
+cp /home/azureuser/.cache/dincli/local/model_0/services/modelowner.py /home/azureuser/projects/DINv1MVC/cache_model_0/services/modelowner.py
 
+cp /home/azureuser/.cache/dincli/local/model_0/services/client.py /home/azureuser/projects/DINv1MVC/cache_model_0/services/client.py
 
+cp /home/azureuser/.cache/dincli/local/model_0/services/auditor.py /home/azureuser/projects/DINv1MVC/cache_model_0/services/auditor.py
 
+cp /home/azureuser/.cache/dincli/local/model_0/services/aggregator.py /home/azureuser/projects/DINv1MVC/cache_model_0/services/aggregator.py
+
+cp /home/azureuser/.cache/dincli/local/model_0/services/model.py /home/azureuser/projects/DINv1MVC/cache_model_0/services/model.py
+
+mkdir -p /home/azureuser/projects/DINv1MVC/cache_model_0/dataset/test
+cp /home/azureuser/.cache/dincli/local/model_0/dataset/test/test_dataset.pt /home/azureuser/projects/DINv1MVC/cache_model_0/dataset/test/test_dataset.pt
 
 
 

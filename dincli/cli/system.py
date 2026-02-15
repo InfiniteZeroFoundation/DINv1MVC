@@ -67,7 +67,6 @@ def system(
     if ctx.invoked_subcommand in ["connect-wallet", "init", "welcome", "where", "configure-network", "configure-demo", "read_wallet", "show_index", "din-info", "configure-logging", "dump-abi", "reset-all", "todo", "buy-usdt", "dataset"]:
         return
 
-
     effective_network, w3, account, console = ctx.obj.get_en_w3_account_console()
 
     if usdt_info:
@@ -94,7 +93,7 @@ def system(
         target_address = w3.to_checksum_address(address)
     else:
         target_address = account.address
-    console.print(f"\n[green]Account Address:[/green] {target_address}")
+    console.print(f"\n[green]Target Account Address:[/green] {target_address}")
     
      # Fetch ETH balance if requested
     if eth_balance:
@@ -116,9 +115,6 @@ def system(
         usdt_balance_fmt = Decimal(usdt_balance_raw) / Decimal(10**6)
 
         console.print(f"[green]USDT Balance:[/green] {usdt_balance_fmt} USDT")
-
-    raise typer.Exit()
-
 
 @app.command()
 def where(ctx: typer.Context):

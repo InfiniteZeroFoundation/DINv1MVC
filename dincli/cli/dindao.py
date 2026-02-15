@@ -60,6 +60,8 @@ def din_coordinator(
     din_addresses = load_din_info()
     din_addresses[effective_network]["token"] = dintoken_address
     save_din_info(din_addresses)
+
+
     
 @deploy_app.command("din-validator-stake")
 def din_validator_stake(
@@ -141,7 +143,6 @@ def din_validator_stake(
     
     if tx_receipt.status == 1:
         console.print("[bold green] ✅ DinValidatorStake contract added to DINCoordinator contract successfully[/bold green]")
-        
     else:
         console.print("[bold red] ❌ Failed to add DinValidatorStake contract to DINCoordinator contract[/bold red]")
 

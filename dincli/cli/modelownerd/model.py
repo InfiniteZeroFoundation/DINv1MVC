@@ -13,7 +13,6 @@ model_app = typer.Typer(help="Model-level commands")
 def create_genesis(
     ctx: typer.Context,
     help: bool = typer.Option(False, "--help","-h", help="Show help"),
-    default: bool = typer.Option(False, "--default", help="use default service"),
     task_coordinator_address: str = typer.Option(None, "--taskCoordinator", help="Task coordinator address"),
 ):
     effective_network, w3, account, console = ctx.obj.get_en_w3_account_console()
@@ -23,7 +22,7 @@ def create_genesis(
         if not task_coordinator_address:
             raise typer.Exit(1)
         else:
-            console.print(f"[bold green] Using DIN Task Coordinator Address: {task_coordinator_address}[/bold green]")
+            console.print(f"[bold green] Using DIN Task Coordinator Address: {task_coordinator_address} from {os.getcwd()}/.env[/bold green]")
 
     if help:
         console.print("[bold green]Usage:[/bold green]")
@@ -33,76 +32,25 @@ def create_genesis(
         console.print(f"The genesis model hash will be set in {os.getcwd()}/.env under {effective_network.upper() + '_' + task_coordinator_address}_GENESIS_MODEL_IPFS_HASH")
         raise typer.Exit(0)
 
-    
-    if not default:
-        
-        tasks_dir = Path.cwd() / 'tasks' / effective_network.lower()
-        # Ensure tasks_dir exists
-        if not tasks_dir.exists():
-            raise FileNotFoundError(f"Tasks directory not found: {tasks_dir}")
+    task_dir = Path(os.getcwd()) / 'tasks' / effective_network.lower() / task_coordinator_address
+    os.makedirs(task_dir, exist_ok=True)
 
-        # Check if target already exists
-        target_folder = tasks_dir / task_coordinator_address
+    manifest = get_manifest_key(effective_network, "getGenesisModelIpfs", None, task_coordinator_address)
+    service_path = task_dir / Path(manifest["path"])
+    model_service_path = task_dir / Path(get_manifest_key(effective_network, "ModelArchitecture", None, task_coordinator_address)["path"])
 
-        # ### Start - To Delete ###
-        # # Find all subdirs that look like Ethereum addresses
-        # eth_like_subdirs = [
-        #     p for p in tasks_dir.iterdir()
-        #     if p.is_dir() and is_ethereum_address(p.name)
-        # ]
+    if manifest["type"] == "custom":
 
-        # target_normalized = task_coordinator_address.lower()
-
-        # # Check if target already exists (case-insensitively)
-        # target_exists = any(
-        #     p.name.lower() == target_normalized for p in eth_like_subdirs
-        # )
-
-        # if not target_exists:
-        #     # Filter out the target itself just in case (shouldn't be needed, but safe)
-        #     candidates = [p for p in eth_like_subdirs if p.name.lower() != target_normalized]
-        #     if len(candidates) == 1:
-        #         # Exactly one folder exists → assume it's the one to rename
-        #         old_folder = candidates[0]
-        #         console.print(f"Auto-renaming task coordinator folder: {old_folder.name} → {task_coordinator_address}")
-        #         old_folder.rename(target_folder)
-        #     elif len(candidates) == 0:
-        #         raise FileNotFoundError(
-        #             f"No existing Ethereum-like coordinator folder found in {tasks_dir}, "
-        #             f"and target '{task_coordinator_address}' does not exist."
-        #         )
-        #     else:
-        #         raise RuntimeError(
-        #             f"Multiple Ethereum-like coordinator folders found, but target is missing. "
-        #             f"Cannot auto-rename. Candidates: {[p.name for p in candidates]}"
-        #         )
-        # ### End - To Delete ###
-        # # Construct the path
-
-
-        if get_manifest_key(effective_network, "getGenesisModelIpfs", None, task_coordinator_address)["type"] == "custom":
-            service_path_str = get_manifest_key(effective_network, "getGenesisModelIpfs", None, task_coordinator_address)["path"]
-            service_path = target_folder / Path(service_path_str)
-
-        if not service_path.exists():
-            retrieve_from_ipfs(get_manifest_key(effective_network,"getGenesisModelIpfs", None, task_coordinator_address)["ipfs"], service_path)
-
-        model_service_path_str = target_folder / get_manifest_key(effective_network, "ModelArchitecture", None, task_coordinator_address)["path"]
-        model_service_path = target_folder / Path(model_service_path_str)
-
-        if not model_service_path.exists():
-            retrieve_from_ipfs(get_manifest_key(effective_network,"ModelArchitecture", None, task_coordinator_address)["ipfs"], model_service_path)
-
+        ctx.obj.ensure_file_exists(service_path, manifest["ipfs"], "model owner service")
+        ctx.obj.ensure_file_exists(model_service_path, get_manifest_key(effective_network, "ModelArchitecture", None, task_coordinator_address)["ipfs"], "model architecture service")
         console.print("[bold green]Creating genesis model... [/bold green]")
         fn = ctx.obj.load_custom_fn(
             service_path,
             "getGenesisModelIpfs"
         )
-        base_path = Path(os.getcwd()) / "tasks" / effective_network.lower() / task_coordinator_address
-        model_hash = fn(base_path)
+        model_hash = fn(task_dir)
     else:
-        model_hash = getGenesisModelIpfs(base_path = Path(os.getcwd()) / "tasks" / effective_network.lower() / task_coordinator_address)
-    
+        model_hash = getGenesisModelIpfs(base_path = task_dir)
     
     console.print(f"[bold green]Genesis model created successfully![/bold green]")
     console.print(f"[cyan]Model hash:[/cyan] {model_hash}")

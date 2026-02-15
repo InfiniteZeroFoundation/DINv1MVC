@@ -42,10 +42,7 @@ def task_coordinator(
         "chainId": w3.eth.chain_id,
     })
     
-    # Sign transaction
     signed_tx = account.sign_transaction(tx)
-    
-    # Send raw transaction
     tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
     tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
     
@@ -55,7 +52,6 @@ def task_coordinator(
     
     set_env_key(effective_network.upper()+"_DINTaskCoordinator_Contract_Address", dintaskcoordinator_contract_address)
     console.print(f"[green]✓ Saved DINTaskCoordinator address to {os.getcwd()}/.env as {effective_network.upper()}_DINTaskCoordinator_Contract_Address[/green]")
-
 
 @deploy_app.command()
 def task_auditor(
@@ -150,5 +146,3 @@ def task_auditor(
         console.print(f"[bold green]✓ DINTaskAuditor contract set in DINTaskCoordinator[/bold green]")
     else:
         console.print(f"[red]Error:[/red] Failed to set DINTaskAuditor in DINTaskCoordinator")
-    
-    return dintaskauditor_contract_address

@@ -1,16 +1,17 @@
+import torch
+from dincli.services.ipfs import retrieve_from_ipfs, upload_to_ipfs
+from torch.utils.data import DataLoader
+import torch.nn as nn
+from rich.console import Console
+import torch.optim as optim
 import os
+import torch
+import torch.nn.functional as F
+from dincli.cli.utils import CONFIG_DIR, get_w3, get_config
 import sys
 
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from rich.console import Console
-from torch.utils.data import DataLoader
-
-from dincli.cli.utils import get_w3
-from dincli.services.ipfs import retrieve_from_ipfs, upload_to_ipfs
-
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from model import ModelArchitecture
 console = Console()
 
 
@@ -67,7 +68,7 @@ def train_client_model_and_upload_to_ipfs(
     # Step 3: Load the initial model
     if initial_model_ipfs_hash:
         retrieve_from_ipfs(initial_model_ipfs_hash, model_base_dir /"models"/f"gm_{gi-1}.pt")
-        model_architecture.load_state_dict(torch.load(model_base_dir /"models"/f"gm_{gi-1}.pt"))
+        model_architecture.load_state_dict(torch.load(model_base_dir /"models"/f"gm_{gi-1}.pt", weights_only=True))
         console.print(f"Initial model loaded and weights initialized from GM")
 
     # Step 4: Define the DataLoader

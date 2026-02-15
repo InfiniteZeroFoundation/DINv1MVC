@@ -1,13 +1,14 @@
+import torch
 import os
 import sys
-
-import torch
+from dincli.services.ipfs import retrieve_from_ipfs, upload_to_ipfs
+from dincli.cli.utils import CONFIG_DIR
 from rich import console
 
-from dincli.services.ipfs import retrieve_from_ipfs, upload_to_ipfs
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+from model import ModelArchitecture
 console = console.Console()
 
 
