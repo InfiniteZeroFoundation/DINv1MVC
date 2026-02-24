@@ -72,10 +72,8 @@ contract DINTaskCoordinator is Ownable {
     function setDINTaskAuditorContract(
         address _dintaskauditor_contract_address
     ) public onlyOwner {
-        require(
-            GIstate == GIstates.AwaitingDINTaskAuditorToBeSet,
-            "DINTaskAuditor contract can not be set"
-        );
+        if (GIstate != GIstates.AwaitingDINTaskAuditorToBeSet)
+            revert TC_TaskAuditorContractCannotBeSet();
         dinTaskAuditorContract = IDINTaskAuditor(
             _dintaskauditor_contract_address
         );
@@ -83,76 +81,59 @@ contract DINTaskCoordinator is Ownable {
     }
 
     function setDINTaskCoordinatorAsSlasher() public onlyOwner {
-        require(
-            GIstate == GIstates.AwaitingDINTaskCoordinatorAsSlasher,
-            "DINTaskCoordinator can not be set as slasher"
-        );
-        require(
-            dinvalidatorStakeContract.is_slasher_contract(address(this)),
-            "DINTaskCoordinator is not a slasher"
-        );
+        if (GIstate != GIstates.AwaitingDINTaskCoordinatorAsSlasher)
+            revert TC_CoordinatorCannotBeSetAsSlasher();
+        if (!dinvalidatorStakeContract.is_slasher_contract(address(this)))
+            revert TC_CoordinatorIsNotSlasher();
         GIstate = GIstates.AwaitingDINTaskAuditorAsSlasher;
     }
 
     function setDINTaskAuditorAsSlasher() public onlyOwner {
-        require(
-            GIstate == GIstates.AwaitingDINTaskAuditorAsSlasher,
-            "DINTaskAuditor can not be set as slasher"
-        );
-        require(
-            dinvalidatorStakeContract.is_slasher_contract(
+        if (GIstate != GIstates.AwaitingDINTaskAuditorAsSlasher)
+            revert TC_AuditorCannotBeSetAsSlasher();
+        if (
+            !dinvalidatorStakeContract.is_slasher_contract(
                 address(dinTaskAuditorContract)
-            ),
-            "DINTaskAuditor is not a slasher"
-        );
+            )
+        ) revert TC_AuditorIsNotSlasher();
         GIstate = GIstates.AwaitingGenesisModel;
     }
 
     function setGenesisModelIpfsHash(
         string memory _genesisModelIpfsHash
     ) public onlyOwner {
-        require(
-            GIstate == GIstates.AwaitingGenesisModel,
-            "Genesis model ipfs hash can not be set"
-        );
+        if (GIstate != GIstates.AwaitingGenesisModel)
+            revert TC_GenesisModelHashCannotBeSet();
         genesisModelIpfsHash = _genesisModelIpfsHash;
         GIstate = GIstates.GenesisModelCreated;
     }
 
     function startGI(uint _GI, uint score) public onlyOwner {
-        require(
-            GIstate == GIstates.GenesisModelCreated ||
-                GIstate == GIstates.GIended,
-            "GI can not be started"
-        );
-        require(_GI == GI + 1, "Invalid GlobalIteration");
+        if (
+            GIstate != GIstates.GenesisModelCreated &&
+            GIstate != GIstates.GIended
+        ) revert TC_GICannotBeStarted();
+        if (_GI != GI + 1) revert TC_WrongGI();
         dinTaskAuditorContract.updatePassScore(score);
         GIstate = GIstates.GIstarted;
         GI++;
     }
 
     function startDINaggregatorsRegistration(uint _GI) public onlyOwner {
-        require(
-            GIstate == GIstates.GIstarted,
-            "DINaggregators registration can not be started"
-        );
-        require(_GI == GI, "Invalid GlobalIteration");
+        if (GIstate != GIstates.GIstarted)
+            revert TC_AggregatorsRegistrationCannotBeStarted();
+        if (_GI != GI) revert TC_WrongGI();
         GIstate = GIstates.DINaggregatorsRegistrationStarted;
     }
 
     function registerDINaggregator(uint _GI) public {
-        require(
-            GIstate == GIstates.DINaggregatorsRegistrationStarted,
-            "aggregators registration not open"
-        );
+        if (GIstate != GIstates.DINaggregatorsRegistrationStarted)
+            revert TC_AggregatorsRegistrationNotOpen();
 
         uint256 stake = dinvalidatorStakeContract.getStake(msg.sender);
-        require(stake >= minStake, "Insufficient stake to register");
-        // Check if already registered using O(1) lookup
-        require(
-            !isDINAggregator[_GI][msg.sender],
-            "Validator already registered"
-        );
+        if (stake < minStake) revert TC_InsufficientStake();
+        if (isDINAggregator[_GI][msg.sender])
+            revert TC_ValidatorAlreadyRegistered();
 
         // Add to list and mark as registered
         dinAggregators[_GI].push(msg.sender);
@@ -162,11 +143,9 @@ contract DINTaskCoordinator is Ownable {
     }
 
     function closeDINaggregatorsRegistration(uint _GI) public onlyOwner {
-        require(
-            GIstate == GIstates.DINaggregatorsRegistrationStarted,
-            "DINaggregators registration can not be finished"
-        );
-        require(_GI == GI, "Invalid GlobalIteration");
+        if (GIstate != GIstates.DINaggregatorsRegistrationStarted)
+            revert TC_AggregatorsRegistrationCannotBeFinished();
+        if (_GI != GI) revert TC_WrongGI();
         GIstate = GIstates.DINaggregatorsRegistrationClosed;
     }
 
@@ -177,98 +156,77 @@ contract DINTaskCoordinator is Ownable {
     }
 
     function startDINauditorsRegistration(uint _GI) public onlyOwner {
-        require(
-            GIstate == GIstates.DINaggregatorsRegistrationClosed,
-            "DINauditor registration can not be started"
-        );
-        require(_GI == GI, "Invalid GlobalIteration");
+        if (GIstate != GIstates.DINaggregatorsRegistrationClosed)
+            revert TC_AuditorsRegistrationCannotBeStarted();
+        if (_GI != GI) revert TC_WrongGI();
         GIstate = GIstates.DINauditorsRegistrationStarted;
     }
 
     function closeDINauditorsRegistration(uint _GI) public onlyOwner {
-        require(
-            GIstate == GIstates.DINauditorsRegistrationStarted,
-            "DINauditor registration can not be finished"
-        );
-        require(_GI == GI, "Invalid GlobalIteration");
+        if (GIstate != GIstates.DINauditorsRegistrationStarted)
+            revert TC_AuditorsRegistrationCannotBeFinished();
+        if (_GI != GI) revert TC_WrongGI();
         GIstate = GIstates.DINauditorsRegistrationClosed;
     }
 
     function startLMsubmissions(uint _GI) public onlyOwner {
-        require(
-            GIstate == GIstates.DINauditorsRegistrationClosed,
-            "LM submissions can not be started"
-        );
-        require(_GI == GI, "Invalid GlobalIteration");
+        if (GIstate != GIstates.DINauditorsRegistrationClosed)
+            revert TC_LMSubmissionsCannotBeStarted();
+        if (_GI != GI) revert TC_WrongGI();
         GIstate = GIstates.LMSstarted;
     }
 
     function closeLMsubmissions(uint _GI) public onlyOwner {
-        require(
-            GIstate == GIstates.LMSstarted,
-            "LM submissions are not started"
-        );
-        require(_GI == GI, "Invalid GlobalIteration");
+        if (GIstate != GIstates.LMSstarted) revert TC_LMSubmissionsNotStarted();
+        if (_GI != GI) revert TC_WrongGI();
         GIstate = GIstates.LMSclosed;
     }
 
     function createAuditorsBatches(uint _GI) public onlyOwner {
-        require(
-            GIstate == GIstates.LMSclosed,
-            "LM submissions evaluation can not be started"
-        );
-        require(_GI == GI, "Invalid GlobalIteration");
+        if (GIstate != GIstates.LMSclosed) revert TC_LMEvalCannotBeStarted();
+        if (_GI != GI) revert TC_WrongGI();
 
         bool success = dinTaskAuditorContract.createAuditorsBatches(_GI);
-        require(success, "Failed to create auditors batches");
+        if (!success) revert TC_FailedToCreateAuditorsBatches();
 
         GIstate = GIstates.AuditorsBatchesCreated;
     }
 
     function setTestDataAssignedFlag(uint _GI, bool flag) external onlyOwner {
-        require(_GI == GI, "Wrong GI");
-        require(
-            GIstate == GIstates.AuditorsBatchesCreated,
-            "TC: can not set TestDataAssignedFlag"
-        );
+        if (_GI != GI) revert TC_WrongGI();
+        if (GIstate != GIstates.AuditorsBatchesCreated)
+            revert TC_CannotSetTestDataAssignedFlag();
 
         dinTaskAuditorContract.setTestDataAssignedFlag(_GI, flag);
     }
 
     function startLMsubmissionsEvaluation(uint _GI) public onlyOwner {
-        require(
-            GIstate == GIstates.AuditorsBatchesCreated,
-            "LM submissions evaluation can not be started"
-        );
-        require(_GI == GI, "Invalid GlobalIteration");
-
+        if (GIstate != GIstates.AuditorsBatchesCreated)
+            revert TC_LMEvalCannotBeStarted();
+        if (_GI != GI) revert TC_WrongGI();
         GIstate = GIstates.LMSevaluationStarted;
     }
 
     function closeLMsubmissionsEvaluation(uint _GI) public onlyOwner {
-        require(
-            GIstate == GIstates.LMSevaluationStarted,
-            "LM submissions evaluation can not be finished"
-        );
-        require(_GI == GI, "Invalid GlobalIteration");
+        if (GIstate != GIstates.LMSevaluationStarted)
+            revert TC_LMEvalCannotBeFinished();
+        if (_GI != GI) revert TC_WrongGI();
         bool success = dinTaskAuditorContract.finalizeEvaluation(_GI);
-        require(success, "Failed to finalize evaluation");
+        if (!success) revert TC_FailedToFinalizeEvaluation();
         GIstate = GIstates.LMSevaluationClosed;
     }
 
     /// @notice Build Tier‑1 and Tier‑2 batches automatically.
     /// @dev  REQUIRES: LM evaluation closed.  Validators must already be registered in dinAggregators[_GI].
     function autoCreateTier1AndTier2(uint _GI) external onlyOwner {
-        require(
-            GIstate == GIstates.LMSevaluationClosed,
-            "Eval phase not closed"
-        );
-        require(_GI == GI, "Wrong GI");
+        if (GIstate != GIstates.LMSevaluationClosed)
+            revert TC_EvalPhaseNotClosed();
+        if (_GI != GI) revert TC_WrongGI();
 
         // ▸ 1. Pull and shuffle validator pool
         address[] storage valPool = dinAggregators[_GI];
         uint vLen = valPool.length;
-        require(vLen >= T1_AGGREGATORS_PER_BATCH, "Not enough validators");
+        if (vLen < T1_AGGREGATORS_PER_BATCH) revert TC_NotEnoughValidators();
         _shuffleAddressArray(valPool);
 
         // ▸ 2. Build list of approved model indexes
@@ -348,18 +306,15 @@ contract DINTaskCoordinator is Ownable {
         uint _GI
     ) internal view returns (uint[] memory out) {
         out = dinTaskAuditorContract.approvedModelIndexes(_GI);
-        require(
-            out.length >= T1_MODELS_PER_BATCH,
-            "Not enough approved models"
-        );
+        if (out.length < T1_MODELS_PER_BATCH)
+            revert TC_NotEnoughApprovedModels();
     }
 
-    // ──────────── read helpers (optional UX) ────────────
+    // ──────────── read helpers ────────────
     function tier1BatchCount(uint _GI) external view returns (uint) {
         return tier1Batches[_GI].length;
     }
 
-    // read one Tier‑1 batch by index
     function getTier1Batch(
         uint _GI,
         uint _id
@@ -374,8 +329,8 @@ contract DINTaskCoordinator is Ownable {
             string memory finalCID
         )
     {
-        require(_GI <= GI, "Wrong GI");
-        require(_id < tier1Batches[_GI].length, "Batch not found");
+        if (_GI > GI) revert TC_WrongGI();
+        if (_id >= tier1Batches[_GI].length) revert TC_BatchNotFound();
         Tier1Batch storage b = tier1Batches[_GI][_id];
         return (
             b.batchId,
@@ -399,18 +354,16 @@ contract DINTaskCoordinator is Ownable {
             string memory finalCID
         )
     {
-        require(_id == 0, "Only one Tier 2 batch");
-        require(_GI <= GI, "Wrong GI");
+        if (_id != 0) revert TC_OnlyOneTier2Batch();
+        if (_GI > GI) revert TC_WrongGI();
         Tier2Batch storage b = tier2Batches[_GI][_id];
         return (b.batchId, b.aggregators, b.finalized, b.finalCID);
     }
 
     function startT1Aggregation(uint _GI) external onlyOwner {
-        require(
-            GIstate == GIstates.T1nT2Bcreated,
-            "Not ready to start T1 aggregation"
-        );
-        require(_GI == GI, "Wrong GI");
+        if (GIstate != GIstates.T1nT2Bcreated)
+            revert TC_NotReadyForT1Aggregation();
+        if (_GI != GI) revert TC_WrongGI();
         GIstate = GIstates.T1AggregationStarted;
     }
 
@@ -419,16 +372,14 @@ contract DINTaskCoordinator is Ownable {
         uint _batchId,
         string memory _aggregationCID
     ) external {
-        require(
-            GIstate == GIstates.T1AggregationStarted,
-            "T1 aggregation not started"
-        );
-        require(_GI == GI, "Wrong GI");
-        require(_batchId < tier1Batches[_GI].length, "Invalid batch");
+        if (GIstate != GIstates.T1AggregationStarted)
+            revert TC_T1AggregationNotStarted();
+        if (_GI != GI) revert TC_WrongGI();
+        if (_batchId >= tier1Batches[_GI].length) revert TC_InvalidBatch();
 
         Tier1Batch storage b = tier1Batches[_GI][_batchId];
 
-        // Verify sender is an assigned validator
+        // Verify sender is an assigned aggregator
         bool isAggregator = false;
         for (uint i = 0; i < b.aggregators.length; i++) {
             if (b.aggregators[i] == msg.sender) {
@@ -436,9 +387,9 @@ contract DINTaskCoordinator is Ownable {
                 break;
             }
         }
-        require(isAggregator, "Not a batch aggregator");
-
-        require(!t1Submitted[_GI][_batchId][msg.sender], "Already submitted");
+        if (!isAggregator) revert TC_NotBatchAggregator();
+        if (t1Submitted[_GI][_batchId][msg.sender])
+            revert TC_AlreadySubmitted();
 
         t1Submitted[_GI][_batchId][msg.sender] = true;
         t1SubmissionCID[_GI][_batchId][msg.sender] = _aggregationCID;
@@ -448,11 +399,9 @@ contract DINTaskCoordinator is Ownable {
     }
 
     function finalizeT1Aggregation(uint _GI) external onlyOwner {
-        require(
-            GIstate == GIstates.T1AggregationStarted,
-            "Not ready to finalize T1 aggregation"
-        );
-        require(_GI == GI, "Wrong GI");
+        if (GIstate != GIstates.T1AggregationStarted)
+            revert TC_NotReadyToFinalizeT1();
+        if (_GI != GI) revert TC_WrongGI();
 
         Tier1Batch[] storage batches = tier1Batches[_GI];
 
@@ -463,7 +412,6 @@ contract DINTaskCoordinator is Ownable {
             string memory winningCID = "";
             uint maxVotes = 0;
 
-            // Enumerate unique CIDs
             for (uint j = 0; j < b.aggregators.length; j++) {
                 address aggregator = b.aggregators[j];
                 if (t1Submitted[_GI][b.batchId][aggregator]) {
@@ -478,7 +426,7 @@ contract DINTaskCoordinator is Ownable {
                 }
             }
 
-            require(bytes(winningCID).length > 0, "No submissions");
+            if (bytes(winningCID).length == 0) revert TC_NoSubmissions();
             b.finalized = true;
             b.finalCID = winningCID;
         }
@@ -487,11 +435,9 @@ contract DINTaskCoordinator is Ownable {
     }
 
     function startT2Aggregation(uint _GI) external onlyOwner {
-        require(
-            GIstate == GIstates.T1AggregationDone,
-            "Not ready to start T2 aggregation"
-        );
-        require(_GI == GI, "Wrong GI");
+        if (GIstate != GIstates.T1AggregationDone)
+            revert TC_NotReadyForT2Aggregation();
+        if (_GI != GI) revert TC_WrongGI();
         GIstate = GIstates.T2AggregationStarted;
     }
 
@@ -500,16 +446,14 @@ contract DINTaskCoordinator is Ownable {
         uint _batchId,
         string memory _aggregationCID
     ) external {
-        require(
-            GIstate == GIstates.T2AggregationStarted,
-            "T2 aggregation not started"
-        );
-        require(_GI == GI, "Wrong GI");
-        require(_batchId == 0, "Only one Tier 2 batch");
+        if (GIstate != GIstates.T2AggregationStarted)
+            revert TC_T2AggregationNotStarted();
+        if (_GI != GI) revert TC_WrongGI();
+        if (_batchId != 0) revert TC_OnlyOneTier2Batch();
 
         Tier2Batch storage b = tier2Batches[_GI][_batchId];
 
-        // Verify sender is an assigned validator
+        // Verify sender is an assigned aggregator
         bool isAggregator = false;
         for (uint i = 0; i < b.aggregators.length; i++) {
             if (b.aggregators[i] == msg.sender) {
@@ -517,9 +461,9 @@ contract DINTaskCoordinator is Ownable {
                 break;
             }
         }
-        require(isAggregator, "Not a batch aggregator");
-
-        require(!t2Submitted[_GI][_batchId][msg.sender], "Already submitted");
+        if (!isAggregator) revert TC_NotBatchAggregator();
+        if (t2Submitted[_GI][_batchId][msg.sender])
+            revert TC_AlreadySubmitted();
 
         t2Submitted[_GI][_batchId][msg.sender] = true;
         t2SubmissionCID[_GI][_batchId][msg.sender] = _aggregationCID;
@@ -529,11 +473,9 @@ contract DINTaskCoordinator is Ownable {
     }
 
     function finalizeT2Aggregation(uint _GI) external onlyOwner {
-        require(
-            GIstate == GIstates.T2AggregationStarted,
-            "Not ready to finalize T2 aggregation"
-        );
-        require(_GI == GI, "Wrong GI");
+        if (GIstate != GIstates.T2AggregationStarted)
+            revert TC_NotReadyToFinalizeT2();
+        if (_GI != GI) revert TC_WrongGI();
 
         Tier2Batch[] storage batches = tier2Batches[_GI];
 
@@ -544,7 +486,6 @@ contract DINTaskCoordinator is Ownable {
             string memory winningCID = "";
             uint maxVotes = 0;
 
-            // Enumerate unique CIDs
             for (uint j = 0; j < b.aggregators.length; j++) {
                 address aggregator = b.aggregators[j];
                 if (t2Submitted[_GI][b.batchId][aggregator]) {
@@ -559,7 +500,7 @@ contract DINTaskCoordinator is Ownable {
                 }
             }
 
-            require(bytes(winningCID).length > 0, "No submissions");
+            if (bytes(winningCID).length == 0) revert TC_NoSubmissions();
             b.finalized = true;
             b.finalCID = winningCID;
         }
@@ -568,21 +509,17 @@ contract DINTaskCoordinator is Ownable {
     }
 
     function slashAuditors(uint _GI) external onlyOwner {
-        require(
-            GIstate == GIstates.T2AggregationDone,
-            "Not ready to slash auditors"
-        );
-        require(_GI == GI, "Wrong GI");
+        if (GIstate != GIstates.T2AggregationDone)
+            revert TC_NotReadyToSlashAuditors();
+        if (_GI != GI) revert TC_WrongGI();
         // The Actual Slashing logic maybe implemented here
         GIstate = GIstates.AuditorsSlashed;
     }
 
     function slashValidators(uint _GI) external onlyOwner {
-        require(
-            GIstate == GIstates.AuditorsSlashed,
-            "Not ready to slash validators"
-        );
-        require(_GI == GI, "Wrong GI");
+        if (GIstate != GIstates.AuditorsSlashed)
+            revert TC_NotReadyToSlashValidators();
+        if (_GI != GI) revert TC_WrongGI();
 
         uint256 slashAmount = minStake;
 
@@ -634,12 +571,11 @@ contract DINTaskCoordinator is Ownable {
     }
 
     function setTier2Score(uint _GI, uint _score) external onlyOwner {
-        require(_GI == GI, "Wrong GI");
-        require(
-            GIstate == GIstates.T2AggregationDone ||
-                GIstate == GIstates.GenesisModelCreated,
-            "Not ready to set Tier 2 score"
-        );
+        if (_GI != GI) revert TC_WrongGI();
+        if (
+            GIstate != GIstates.T2AggregationDone &&
+            GIstate != GIstates.GenesisModelCreated
+        ) revert TC_NotReadyToSetTier2Score();
         tier2Score[_GI] = _score;
     }
 
@@ -648,8 +584,8 @@ contract DINTaskCoordinator is Ownable {
     }
 
     function endGI(uint _GI) external onlyOwner {
-        require(GIstate == GIstates.AggregatorsSlashed, "Not ready to end GI");
-        require(_GI == GI, "Wrong GI");
+        if (GIstate != GIstates.AggregatorsSlashed) revert TC_NotReadyToEndGI();
+        if (_GI != GI) revert TC_WrongGI();
         GIstate = GIstates.GIended;
     }
 }
