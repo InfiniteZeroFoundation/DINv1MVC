@@ -58,6 +58,11 @@ contract DINTaskCoordinator is Ownable {
         public t2Submitted;
     mapping(uint => mapping(uint => mapping(string => uint))) public t2Votes;
 
+    modifier onlyCurrentGI(uint _GI) {
+        if (_GI != GI) revert TC_WrongGI();
+        _;
+    }
+
     event DINValidatorRegistered(uint indexed GI, address indexed validator);
     event Tier1BatchAuto(uint indexed GI, uint indexed batchId);
     event Tier2BatchAuto(uint indexed GI, uint indexed batchId);
@@ -119,10 +124,11 @@ contract DINTaskCoordinator is Ownable {
         GI++;
     }
 
-    function startDINaggregatorsRegistration(uint _GI) public onlyOwner {
+    function startDINaggregatorsRegistration(
+        uint _GI
+    ) public onlyOwner onlyCurrentGI(_GI) {
         if (GIstate != GIstates.GIstarted)
             revert TC_AggregatorsRegistrationCannotBeStarted();
-        if (_GI != GI) revert TC_WrongGI();
         GIstate = GIstates.DINaggregatorsRegistrationStarted;
     }
 
@@ -142,10 +148,11 @@ contract DINTaskCoordinator is Ownable {
         emit DINValidatorRegistered(_GI, msg.sender);
     }
 
-    function closeDINaggregatorsRegistration(uint _GI) public onlyOwner {
+    function closeDINaggregatorsRegistration(
+        uint _GI
+    ) public onlyOwner onlyCurrentGI(_GI) {
         if (GIstate != GIstates.DINaggregatorsRegistrationStarted)
             revert TC_AggregatorsRegistrationCannotBeFinished();
-        if (_GI != GI) revert TC_WrongGI();
         GIstate = GIstates.DINaggregatorsRegistrationClosed;
     }
 
@@ -155,36 +162,37 @@ contract DINTaskCoordinator is Ownable {
         return dinAggregators[_GI];
     }
 
-    function startDINauditorsRegistration(uint _GI) public onlyOwner {
+    function startDINauditorsRegistration(
+        uint _GI
+    ) public onlyOwner onlyCurrentGI(_GI) {
         if (GIstate != GIstates.DINaggregatorsRegistrationClosed)
             revert TC_AuditorsRegistrationCannotBeStarted();
-        if (_GI != GI) revert TC_WrongGI();
         GIstate = GIstates.DINauditorsRegistrationStarted;
     }
 
-    function closeDINauditorsRegistration(uint _GI) public onlyOwner {
+    function closeDINauditorsRegistration(
+        uint _GI
+    ) public onlyOwner onlyCurrentGI(_GI) {
         if (GIstate != GIstates.DINauditorsRegistrationStarted)
             revert TC_AuditorsRegistrationCannotBeFinished();
-        if (_GI != GI) revert TC_WrongGI();
         GIstate = GIstates.DINauditorsRegistrationClosed;
     }
 
-    function startLMsubmissions(uint _GI) public onlyOwner {
+    function startLMsubmissions(uint _GI) public onlyOwner onlyCurrentGI(_GI) {
         if (GIstate != GIstates.DINauditorsRegistrationClosed)
             revert TC_LMSubmissionsCannotBeStarted();
-        if (_GI != GI) revert TC_WrongGI();
         GIstate = GIstates.LMSstarted;
     }
 
-    function closeLMsubmissions(uint _GI) public onlyOwner {
+    function closeLMsubmissions(uint _GI) public onlyOwner onlyCurrentGI(_GI) {
         if (GIstate != GIstates.LMSstarted) revert TC_LMSubmissionsNotStarted();
-        if (_GI != GI) revert TC_WrongGI();
         GIstate = GIstates.LMSclosed;
     }
 
-    function createAuditorsBatches(uint _GI) public onlyOwner {
+    function createAuditorsBatches(
+        uint _GI
+    ) public onlyOwner onlyCurrentGI(_GI) {
         if (GIstate != GIstates.LMSclosed) revert TC_LMEvalCannotBeStarted();
-        if (_GI != GI) revert TC_WrongGI();
 
         bool success = dinTaskAuditorContract.createAuditorsBatches(_GI);
         if (!success) revert TC_FailedToCreateAuditorsBatches();
@@ -192,25 +200,29 @@ contract DINTaskCoordinator is Ownable {
         GIstate = GIstates.AuditorsBatchesCreated;
     }
 
-    function setTestDataAssignedFlag(uint _GI, bool flag) external onlyOwner {
-        if (_GI != GI) revert TC_WrongGI();
+    function setTestDataAssignedFlag(
+        uint _GI,
+        bool flag
+    ) external onlyOwner onlyCurrentGI(_GI) {
         if (GIstate != GIstates.AuditorsBatchesCreated)
             revert TC_CannotSetTestDataAssignedFlag();
 
         dinTaskAuditorContract.setTestDataAssignedFlag(_GI, flag);
     }
 
-    function startLMsubmissionsEvaluation(uint _GI) public onlyOwner {
+    function startLMsubmissionsEvaluation(
+        uint _GI
+    ) public onlyOwner onlyCurrentGI(_GI) {
         if (GIstate != GIstates.AuditorsBatchesCreated)
             revert TC_LMEvalCannotBeStarted();
-        if (_GI != GI) revert TC_WrongGI();
         GIstate = GIstates.LMSevaluationStarted;
     }
 
-    function closeLMsubmissionsEvaluation(uint _GI) public onlyOwner {
+    function closeLMsubmissionsEvaluation(
+        uint _GI
+    ) public onlyOwner onlyCurrentGI(_GI) {
         if (GIstate != GIstates.LMSevaluationStarted)
             revert TC_LMEvalCannotBeFinished();
-        if (_GI != GI) revert TC_WrongGI();
         bool success = dinTaskAuditorContract.finalizeEvaluation(_GI);
         if (!success) revert TC_FailedToFinalizeEvaluation();
         GIstate = GIstates.LMSevaluationClosed;
@@ -218,10 +230,11 @@ contract DINTaskCoordinator is Ownable {
 
     /// @notice Build Tier‑1 and Tier‑2 batches automatically.
     /// @dev  REQUIRES: LM evaluation closed.  Validators must already be registered in dinAggregators[_GI].
-    function autoCreateTier1AndTier2(uint _GI) external onlyOwner {
+    function autoCreateTier1AndTier2(
+        uint _GI
+    ) external onlyOwner onlyCurrentGI(_GI) {
         if (GIstate != GIstates.LMSevaluationClosed)
             revert TC_EvalPhaseNotClosed();
-        if (_GI != GI) revert TC_WrongGI();
 
         // ▸ 1. Pull and shuffle validator pool
         address[] storage valPool = dinAggregators[_GI];
@@ -360,10 +373,11 @@ contract DINTaskCoordinator is Ownable {
         return (b.batchId, b.aggregators, b.finalized, b.finalCID);
     }
 
-    function startT1Aggregation(uint _GI) external onlyOwner {
+    function startT1Aggregation(
+        uint _GI
+    ) external onlyOwner onlyCurrentGI(_GI) {
         if (GIstate != GIstates.T1nT2Bcreated)
             revert TC_NotReadyForT1Aggregation();
-        if (_GI != GI) revert TC_WrongGI();
         GIstate = GIstates.T1AggregationStarted;
     }
 
@@ -371,10 +385,9 @@ contract DINTaskCoordinator is Ownable {
         uint _GI,
         uint _batchId,
         string memory _aggregationCID
-    ) external {
+    ) external onlyCurrentGI(_GI) {
         if (GIstate != GIstates.T1AggregationStarted)
             revert TC_T1AggregationNotStarted();
-        if (_GI != GI) revert TC_WrongGI();
         if (_batchId >= tier1Batches[_GI].length) revert TC_InvalidBatch();
 
         Tier1Batch storage b = tier1Batches[_GI][_batchId];
@@ -398,10 +411,11 @@ contract DINTaskCoordinator is Ownable {
         t1Votes[_GI][_batchId][_aggregationCID]++;
     }
 
-    function finalizeT1Aggregation(uint _GI) external onlyOwner {
+    function finalizeT1Aggregation(
+        uint _GI
+    ) external onlyOwner onlyCurrentGI(_GI) {
         if (GIstate != GIstates.T1AggregationStarted)
             revert TC_NotReadyToFinalizeT1();
-        if (_GI != GI) revert TC_WrongGI();
 
         Tier1Batch[] storage batches = tier1Batches[_GI];
 
@@ -434,10 +448,11 @@ contract DINTaskCoordinator is Ownable {
         GIstate = GIstates.T1AggregationDone;
     }
 
-    function startT2Aggregation(uint _GI) external onlyOwner {
+    function startT2Aggregation(
+        uint _GI
+    ) external onlyOwner onlyCurrentGI(_GI) {
         if (GIstate != GIstates.T1AggregationDone)
             revert TC_NotReadyForT2Aggregation();
-        if (_GI != GI) revert TC_WrongGI();
         GIstate = GIstates.T2AggregationStarted;
     }
 
@@ -445,10 +460,9 @@ contract DINTaskCoordinator is Ownable {
         uint _GI,
         uint _batchId,
         string memory _aggregationCID
-    ) external {
+    ) external onlyCurrentGI(_GI) {
         if (GIstate != GIstates.T2AggregationStarted)
             revert TC_T2AggregationNotStarted();
-        if (_GI != GI) revert TC_WrongGI();
         if (_batchId != 0) revert TC_OnlyOneTier2Batch();
 
         Tier2Batch storage b = tier2Batches[_GI][_batchId];
@@ -472,10 +486,11 @@ contract DINTaskCoordinator is Ownable {
         t2Votes[_GI][_batchId][_aggregationCID]++;
     }
 
-    function finalizeT2Aggregation(uint _GI) external onlyOwner {
+    function finalizeT2Aggregation(
+        uint _GI
+    ) external onlyOwner onlyCurrentGI(_GI) {
         if (GIstate != GIstates.T2AggregationStarted)
             revert TC_NotReadyToFinalizeT2();
-        if (_GI != GI) revert TC_WrongGI();
 
         Tier2Batch[] storage batches = tier2Batches[_GI];
 
@@ -508,18 +523,16 @@ contract DINTaskCoordinator is Ownable {
         GIstate = GIstates.T2AggregationDone;
     }
 
-    function slashAuditors(uint _GI) external onlyOwner {
+    function slashAuditors(uint _GI) external onlyOwner onlyCurrentGI(_GI) {
         if (GIstate != GIstates.T2AggregationDone)
             revert TC_NotReadyToSlashAuditors();
-        if (_GI != GI) revert TC_WrongGI();
         // The Actual Slashing logic maybe implemented here
         GIstate = GIstates.AuditorsSlashed;
     }
 
-    function slashValidators(uint _GI) external onlyOwner {
+    function slashValidators(uint _GI) external onlyOwner onlyCurrentGI(_GI) {
         if (GIstate != GIstates.AuditorsSlashed)
             revert TC_NotReadyToSlashValidators();
-        if (_GI != GI) revert TC_WrongGI();
 
         uint256 slashAmount = minStake;
 
@@ -570,8 +583,10 @@ contract DINTaskCoordinator is Ownable {
         GIstate = GIstates.AggregatorsSlashed;
     }
 
-    function setTier2Score(uint _GI, uint _score) external onlyOwner {
-        if (_GI != GI) revert TC_WrongGI();
+    function setTier2Score(
+        uint _GI,
+        uint _score
+    ) external onlyOwner onlyCurrentGI(_GI) {
         if (
             GIstate != GIstates.T2AggregationDone &&
             GIstate != GIstates.GenesisModelCreated
@@ -583,9 +598,8 @@ contract DINTaskCoordinator is Ownable {
         return tier2Score[_GI];
     }
 
-    function endGI(uint _GI) external onlyOwner {
+    function endGI(uint _GI) external onlyOwner onlyCurrentGI(_GI) {
         if (GIstate != GIstates.AggregatorsSlashed) revert TC_NotReadyToEndGI();
-        if (_GI != GI) revert TC_WrongGI();
         GIstate = GIstates.GIended;
     }
 }

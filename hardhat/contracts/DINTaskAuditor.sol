@@ -106,6 +106,11 @@ contract DINTaskAuditor is Ownable {
         _;
     }
 
+    modifier onlyCurrentGI(uint _GI) {
+        if (_GI != dintaskcoordinatorContract.GI()) revert TA_WrongGI();
+        _;
+    }
+
     event RewardDeposited(address indexed modelOwner, uint256 amount);
 
     event DINAuditorRegistered(uint indexed GI, address indexed auditor);
@@ -182,12 +187,11 @@ contract DINTaskAuditor is Ownable {
         emit PassScoreUpdated(oldScore, newPassScore);
     }
 
-    function registerDINAuditor(uint _GI) public {
+    function registerDINAuditor(uint _GI) public onlyCurrentGI(_GI) {
         if (
             dintaskcoordinatorContract.GIstate() !=
             GIstates.DINauditorsRegistrationStarted
         ) revert TA_AuditorRegistrationNotOpen();
-        if (_GI != dintaskcoordinatorContract.GI()) revert TA_WrongGI();
         if (isRegisteredAuditor[_GI][msg.sender])
             revert TA_AuditorAlreadyRegistered();
 
@@ -206,8 +210,10 @@ contract DINTaskAuditor is Ownable {
         return dinAuditors[_GI];
     }
 
-    function submitLocalModel(string memory _clientModel, uint _GI) public {
-        if (_GI != dintaskcoordinatorContract.GI()) revert TA_WrongGI();
+    function submitLocalModel(
+        string memory _clientModel,
+        uint _GI
+    ) public onlyCurrentGI(_GI) {
         if (dintaskcoordinatorContract.GIstate() != GIstates.LMSstarted)
             revert TA_LMSubmissionsNotOpen();
         if (clientHasSubmitted[_GI][msg.sender]) revert TA_AlreadySubmitted();
@@ -268,8 +274,7 @@ contract DINTaskAuditor is Ownable {
 
     function createAuditorsBatches(
         uint _GI
-    ) external onlyTaskCoordinator returns (bool) {
-        if (_GI != dintaskcoordinatorContract.GI()) revert TA_WrongGI();
+    ) external onlyTaskCoordinator onlyCurrentGI(_GI) returns (bool) {
         if (dintaskcoordinatorContract.GIstate() != GIstates.LMSclosed)
             revert TA_CannotCreateAuditorsBatches();
 
@@ -359,8 +364,7 @@ contract DINTaskAuditor is Ownable {
         uint256 gi,
         uint256 batchId,
         string calldata testDataCID
-    ) external onlyOwner {
-        if (gi != dintaskcoordinatorContract.GI()) revert TA_WrongGI();
+    ) external onlyOwner onlyCurrentGI(gi) {
         if (batchId >= auditBatches[gi].length) revert TA_BatchDoesNotExist();
         if (auditBatches[gi][batchId].batchId != batchId)
             revert TA_BatchIDMismatch();
@@ -372,8 +376,7 @@ contract DINTaskAuditor is Ownable {
     function setTestDataAssignedFlag(
         uint _GI,
         bool flag
-    ) external onlyTaskCoordinator returns (bool) {
-        if (_GI != dintaskcoordinatorContract.GI()) revert TA_WrongGI();
+    ) external onlyTaskCoordinator onlyCurrentGI(_GI) returns (bool) {
         if (
             dintaskcoordinatorContract.GIstate() !=
             GIstates.AuditorsBatchesCreated
@@ -443,8 +446,7 @@ contract DINTaskAuditor is Ownable {
         uint modelIndex,
         uint256 score,
         bool vote // true = eligible, false = not eligible
-    ) public onlyAssignedAuditor(gi, batchId, modelIndex) {
-        if (gi != dintaskcoordinatorContract.GI()) revert TA_WrongGI();
+    ) public onlyAssignedAuditor(gi, batchId, modelIndex) onlyCurrentGI(gi) {
         if (
             dintaskcoordinatorContract.GIstate() !=
             GIstates.LMSevaluationStarted
@@ -468,8 +470,7 @@ contract DINTaskAuditor is Ownable {
 
     function finalizeEvaluation(
         uint _GI
-    ) public onlyTaskCoordinator returns (bool) {
-        if (_GI != dintaskcoordinatorContract.GI()) revert TA_WrongGI();
+    ) public onlyTaskCoordinator onlyCurrentGI(_GI) returns (bool) {
         if (
             dintaskcoordinatorContract.GIstate() !=
             GIstates.LMSevaluationStarted
