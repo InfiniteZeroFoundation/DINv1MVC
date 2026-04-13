@@ -28,4 +28,5 @@ tasks/local/0x4657105FC932625CD289107aAE7B2174a822b709/services/__pycache__/*
 /dincli/config/din_info.json 
 /dincli/CliDOC.md
 /dincli/README.md
+foundry/.github/*
 

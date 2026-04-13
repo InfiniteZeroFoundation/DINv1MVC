@@ -72,11 +72,14 @@ const config: HardhatUserConfig = {
         enabled: true,
         runs: 200
       },
-      viaIR: true
+      viaIR: true,
+      // ✅ CRITICAL: Set EVM version to Cancun for TSTORE/TLOAD support
+      evmVersion: "cancun"
     }
   },
   networks: {
     hardhat: {
+      hardfork: "cancun",    // ✅ Required for local testing
       ...(process.env.ALCHEMY_API_KEY
         ? {
           forking: {

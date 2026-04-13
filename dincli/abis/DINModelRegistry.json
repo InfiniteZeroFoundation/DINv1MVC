@@ -66,9 +66,9 @@
         },
         {
           "indexed": false,
-          "internalType": "string",
+          "internalType": "bytes32",
           "name": "newManifestCID",
-          "type": "string"
+          "type": "bytes32"
         }
       ],
       "name": "ManifestUpdated",
@@ -97,9 +97,9 @@
         },
         {
           "indexed": false,
-          "internalType": "string",
+          "internalType": "bytes32",
           "name": "manifestCID",
-          "type": "string"
+          "type": "bytes32"
         }
       ],
       "name": "ModelRegistered",
@@ -165,9 +165,9 @@
           "type": "bool"
         },
         {
-          "internalType": "string",
+          "internalType": "bytes32",
           "name": "manifestoCID",
-          "type": "string"
+          "type": "bytes32"
         },
         {
           "internalType": "uint256",
@@ -252,9 +252,9 @@
     {
       "inputs": [
         {
-          "internalType": "string",
+          "internalType": "bytes32",
           "name": "manifestCID",
-          "type": "string"
+          "type": "bytes32"
         },
         {
           "internalType": "address",
@@ -317,9 +317,9 @@
           "type": "uint256"
         },
         {
-          "internalType": "string",
+          "internalType": "bytes32",
           "name": "newManifestCID",
-          "type": "string"
+          "type": "bytes32"
         }
       ],
       "name": "updateManifest",

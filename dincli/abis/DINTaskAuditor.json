@@ -55,6 +55,121 @@
       "type": "error"
     },
     {
+      "inputs": [],
+      "name": "TA_AlreadySubmitted",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TA_AlreadyVoted",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TA_AmountMustBePositive",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TA_AuditorAlreadyRegistered",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TA_AuditorRegistrationNotOpen",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TA_BatchDoesNotExist",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TA_BatchIDMismatch",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TA_CannotCreateAuditorsBatches",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TA_CannotFinalizeEvaluation",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TA_CannotSetAuditScore",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TA_CannotSetTestDataAssignedFlag",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TA_FlagAlreadySet",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TA_FlagMustBeTrue",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TA_InsufficientStake",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TA_InvalidModelIndex",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TA_InvalidPassScore",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TA_LMSubmissionsNotOpen",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TA_MaxLMSubmissionsReached",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TA_NotAssignedAuditor",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TA_NotEnoughAuditors",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TA_NotTaskCoordinator",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TA_ScoreOutOfRange",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TA_WrongGI",
+      "type": "error"
+    },
+    {
       "anonymous": false,
       "inputs": [
         {
@@ -83,9 +198,9 @@
         },
         {
           "indexed": false,
-          "internalType": "uint8",
+          "internalType": "uint256",
           "name": "score",
-          "type": "uint8"
+          "type": "uint256"
         }
       ],
       "name": "AuditScoreSubmitted",
@@ -246,15 +361,15 @@
       "inputs": [
         {
           "indexed": false,
-          "internalType": "uint8",
+          "internalType": "uint256",
           "name": "oldScore",
-          "type": "uint8"
+          "type": "uint256"
         },
         {
           "indexed": false,
-          "internalType": "uint8",
+          "internalType": "uint256",
           "name": "newScore",
-          "type": "uint8"
+          "type": "uint256"
         }
       ],
       "name": "PassScoreUpdated",
@@ -301,9 +416,9 @@
     {
       "inputs": [
         {
-          "internalType": "uint8",
+          "internalType": "uint256",
           "name": "",
-          "type": "uint8"
+          "type": "uint256"
         }
       ],
       "name": "Is_testdataCIDs_Assigned",
@@ -320,9 +435,9 @@
     {
       "inputs": [
         {
-          "internalType": "uint8",
+          "internalType": "uint256",
           "name": "",
-          "type": "uint8"
+          "type": "uint256"
         },
         {
           "internalType": "uint256",
@@ -373,19 +488,19 @@
     {
       "inputs": [
         {
-          "internalType": "uint8",
+          "internalType": "uint256",
           "name": "gi",
-          "type": "uint8"
+          "type": "uint256"
         },
         {
-          "internalType": "uint8",
+          "internalType": "uint256",
           "name": "batchId",
-          "type": "uint8"
+          "type": "uint256"
         },
         {
-          "internalType": "string",
+          "internalType": "bytes32",
           "name": "testDataCID",
-          "type": "string"
+          "type": "bytes32"
         }
       ],
       "name": "assignAuditTestDataset",
@@ -396,9 +511,9 @@
     {
       "inputs": [
         {
-          "internalType": "uint8",
+          "internalType": "uint256",
           "name": "",
-          "type": "uint8"
+          "type": "uint256"
         },
         {
           "internalType": "uint256",
@@ -414,9 +529,9 @@
           "type": "uint256"
         },
         {
-          "internalType": "string",
+          "internalType": "bytes32",
           "name": "testDataCID",
-          "type": "string"
+          "type": "bytes32"
         }
       ],
       "stateMutability": "view",
@@ -425,9 +540,9 @@
     {
       "inputs": [
         {
-          "internalType": "uint8",
+          "internalType": "uint256",
           "name": "",
-          "type": "uint8"
+          "type": "uint256"
         },
         {
           "internalType": "uint256",
@@ -448,9 +563,9 @@
       "name": "auditScores",
       "outputs": [
         {
-          "internalType": "uint8",
+          "internalType": "uint256",
           "name": "",
-          "type": "uint8"
+          "type": "uint256"
         }
       ],
       "stateMutability": "view",
@@ -636,9 +751,9 @@
           "type": "uint256[]"
         },
         {
-          "internalType": "string",
+          "internalType": "bytes32",
           "name": "testDataCID",
-          "type": "string"
+          "type": "bytes32"
         }
       ],
       "stateMutability": "view",
@@ -662,9 +777,9 @@
               "type": "address"
             },
             {
-              "internalType": "string",
+              "internalType": "bytes32",
               "name": "modelCID",
-              "type": "string"
+              "type": "bytes32"
             },
             {
               "internalType": "uint40",
@@ -687,9 +802,9 @@
               "type": "bool"
             },
             {
-              "internalType": "uint8",
+              "internalType": "uint256",
               "name": "finalAvgScore",
-              "type": "uint8"
+              "type": "uint256"
             }
           ],
           "internalType": "struct DINTaskAuditor.LMSubmission[]",
@@ -761,6 +876,64 @@
           "type": "uint256"
         },
         {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "isBatchAuditor",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "isBatchModelIndex",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        },
+        {
           "internalType": "address",
           "name": "",
           "type": "address"
@@ -798,9 +971,9 @@
           "type": "address"
         },
         {
-          "internalType": "string",
+          "internalType": "bytes32",
           "name": "modelCID",
-          "type": "string"
+          "type": "bytes32"
         },
         {
           "internalType": "uint40",
@@ -823,9 +996,9 @@
           "type": "bool"
         },
         {
-          "internalType": "uint8",
+          "internalType": "uint256",
           "name": "finalAvgScore",
-          "type": "uint8"
+          "type": "uint256"
         }
       ],
       "stateMutability": "view",
@@ -875,29 +1048,29 @@
       "name": "params",
       "outputs": [
         {
-          "internalType": "uint8",
+          "internalType": "uint256",
           "name": "auditorsPerBatch",
-          "type": "uint8"
+          "type": "uint256"
         },
         {
-          "internalType": "uint8",
+          "internalType": "uint256",
           "name": "modelsPerBatch",
-          "type": "uint8"
+          "type": "uint256"
         },
         {
-          "internalType": "uint8",
+          "internalType": "uint256",
           "name": "minEligibilityQuorum",
-          "type": "uint8"
+          "type": "uint256"
         },
         {
-          "internalType": "uint8",
+          "internalType": "uint256",
           "name": "minScoreQuorum",
-          "type": "uint8"
+          "type": "uint256"
         },
         {
-          "internalType": "uint8",
+          "internalType": "uint256",
           "name": "passScore",
-          "type": "uint8"
+          "type": "uint256"
         },
         {
           "internalType": "uint256",
@@ -936,9 +1109,9 @@
     {
       "inputs": [
         {
-          "internalType": "uint8",
+          "internalType": "uint256",
           "name": "gi",
-          "type": "uint8"
+          "type": "uint256"
         },
         {
           "internalType": "uint256",
@@ -951,9 +1124,9 @@
           "type": "uint256"
         },
         {
-          "internalType": "uint8",
+          "internalType": "uint256",
           "name": "score",
-          "type": "uint8"
+          "type": "uint256"
         },
         {
           "internalType": "bool",
@@ -993,9 +1166,9 @@
     {
       "inputs": [
         {
-          "internalType": "string",
+          "internalType": "bytes32",
           "name": "_clientModel",
-          "type": "string"
+          "type": "bytes32"
         },
         {
           "internalType": "uint256",
@@ -1037,9 +1210,9 @@
     {
       "inputs": [
         {
-          "internalType": "uint8",
+          "internalType": "uint256",
           "name": "newPassScore",
-          "type": "uint8"
+          "type": "uint256"
         }
       ],
       "name": "updatePassScore",

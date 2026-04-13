@@ -34,6 +34,211 @@
       "type": "error"
     },
     {
+      "inputs": [],
+      "name": "TC_AggregatorsRegistrationCannotBeFinished",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_AggregatorsRegistrationCannotBeStarted",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_AggregatorsRegistrationNotOpen",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_AlreadySubmitted",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_AuditorCannotBeSetAsSlasher",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_AuditorIsNotSlasher",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_AuditorsRegistrationCannotBeFinished",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_AuditorsRegistrationCannotBeStarted",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_BatchNotFound",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_CannotSetTestDataAssignedFlag",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_CoordinatorCannotBeSetAsSlasher",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_CoordinatorIsNotSlasher",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_EvalPhaseNotClosed",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_FailedToCreateAuditorsBatches",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_FailedToFinalizeEvaluation",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_GICannotBeStarted",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_GenesisModelHashCannotBeSet",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_InsufficientStake",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_InvalidBatch",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_LMEvalCannotBeFinished",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_LMEvalCannotBeStarted",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_LMSubmissionsCannotBeStarted",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_LMSubmissionsNotStarted",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_NoSubmissions",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_NotBatchAggregator",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_NotEnoughApprovedModels",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_NotEnoughValidators",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_NotReadyForT1Aggregation",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_NotReadyForT2Aggregation",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_NotReadyToEndGI",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_NotReadyToFinalizeT1",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_NotReadyToFinalizeT2",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_NotReadyToSetTier2Score",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_NotReadyToSlashAggregators",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_NotReadyToSlashAuditors",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_OnlyOneTier2Batch",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_T1AggregationNotStarted",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_T2AggregationNotStarted",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_TaskAuditorContractCannotBeSet",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_ValidatorAlreadyRegistered",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TC_WrongGI",
+      "type": "error"
+    },
+    {
       "anonymous": false,
       "inputs": [
         {
@@ -127,7 +332,7 @@
       "name": "GIstate",
       "outputs": [
         {
-          "internalType": "enum DINTaskCoordinator.GIstates",
+          "internalType": "enum GIstates",
           "name": "",
           "type": "uint8"
         }
@@ -140,9 +345,9 @@
       "name": "MIN_T1_MODELS_PER_BATCH",
       "outputs": [
         {
-          "internalType": "uint8",
+          "internalType": "uint256",
           "name": "",
-          "type": "uint8"
+          "type": "uint256"
         }
       ],
       "stateMutability": "view",
@@ -153,9 +358,9 @@
       "name": "T1_AGGREGATORS_PER_BATCH",
       "outputs": [
         {
-          "internalType": "uint8",
+          "internalType": "uint256",
           "name": "",
-          "type": "uint8"
+          "type": "uint256"
         }
       ],
       "stateMutability": "view",
@@ -166,9 +371,9 @@
       "name": "T1_MODELS_PER_BATCH",
       "outputs": [
         {
-          "internalType": "uint8",
+          "internalType": "uint256",
           "name": "",
-          "type": "uint8"
+          "type": "uint256"
         }
       ],
       "stateMutability": "view",
@@ -346,9 +551,9 @@
       "name": "genesisModelIpfsHash",
       "outputs": [
         {
-          "internalType": "string",
+          "internalType": "bytes32",
           "name": "",
-          "type": "string"
+          "type": "bytes32"
         }
       ],
       "stateMutability": "view",
@@ -409,9 +614,9 @@
           "type": "bool"
         },
         {
-          "internalType": "string",
+          "internalType": "bytes32",
           "name": "finalCID",
-          "type": "string"
+          "type": "bytes32"
         }
       ],
       "stateMutability": "view",
@@ -448,9 +653,9 @@
           "type": "bool"
         },
         {
-          "internalType": "string",
+          "internalType": "bytes32",
           "name": "finalCID",
-          "type": "string"
+          "type": "bytes32"
         }
       ],
       "stateMutability": "view",
@@ -575,9 +780,9 @@
     {
       "inputs": [
         {
-          "internalType": "string",
+          "internalType": "bytes32",
           "name": "_genesisModelIpfsHash",
-          "type": "string"
+          "type": "bytes32"
         }
       ],
       "name": "setGenesisModelIpfsHash",
@@ -629,7 +834,7 @@
           "type": "uint256"
         }
       ],
-      "name": "slashAuditors",
+      "name": "slashAggregators",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
@@ -642,7 +847,7 @@
           "type": "uint256"
         }
       ],
-      "name": "slashValidators",
+      "name": "slashAuditors",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
@@ -756,9 +961,9 @@
           "type": "uint256"
         },
         {
-          "internalType": "string",
+          "internalType": "bytes32",
           "name": "_aggregationCID",
-          "type": "string"
+          "type": "bytes32"
         }
       ],
       "name": "submitT1Aggregation",
@@ -779,9 +984,9 @@
           "type": "uint256"
         },
         {
-          "internalType": "string",
+          "internalType": "bytes32",
           "name": "_aggregationCID",
-          "type": "string"
+          "type": "bytes32"
         }
       ],
       "name": "submitT2Aggregation",
@@ -810,9 +1015,9 @@
       "name": "t1SubmissionCID",
       "outputs": [
         {
-          "internalType": "string",
+          "internalType": "bytes32",
           "name": "",
-          "type": "string"
+          "type": "bytes32"
         }
       ],
       "stateMutability": "view",
@@ -860,9 +1065,9 @@
           "type": "uint256"
         },
         {
-          "internalType": "string",
+          "internalType": "bytes32",
           "name": "",
-          "type": "string"
+          "type": "bytes32"
         }
       ],
       "name": "t1Votes",
@@ -897,9 +1102,9 @@
       "name": "t2SubmissionCID",
       "outputs": [
         {
-          "internalType": "string",
+          "internalType": "bytes32",
           "name": "",
-          "type": "string"
+          "type": "bytes32"
         }
       ],
       "stateMutability": "view",
@@ -947,9 +1152,9 @@
           "type": "uint256"
         },
         {
-          "internalType": "string",
+          "internalType": "bytes32",
           "name": "",
-          "type": "string"
+          "type": "bytes32"
         }
       ],
       "name": "t2Votes",
@@ -1008,9 +1213,9 @@
           "type": "bool"
         },
         {
-          "internalType": "string",
+          "internalType": "bytes32",
           "name": "finalCID",
-          "type": "string"
+          "type": "bytes32"
         }
       ],
       "stateMutability": "view",
@@ -1042,9 +1247,9 @@
           "type": "bool"
         },
         {
-          "internalType": "string",
+          "internalType": "bytes32",
           "name": "finalCID",
-          "type": "string"
+          "type": "bytes32"
         }
       ],
       "stateMutability": "view",
