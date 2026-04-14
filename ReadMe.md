@@ -15,8 +15,8 @@ This repository contains the DevNet setup and tooling for developers building on
 This project consists of multiple components:
 
 - **CLI**: `dincli` is a command line interface for interacting with the InfiniteZero Network
-- **Hardhat** (Optional): Run for contracts compilation
-- **IPFS Daemon** (Optional): Runs in the background
+- **Hardhat / Foundry** (Optional): Run for contracts compilation
+- **IPFS Daemon** (Or IPFS API): Runs in the background
 
 ---
 

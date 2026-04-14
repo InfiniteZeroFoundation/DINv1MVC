@@ -249,7 +249,7 @@ contract DINModelRegistry {
     /// @notice Update proprietary model network fee
     function setProprietaryFee(uint256 newFee) external {
         require(msg.sender == daoAdmin, "Only DAO admin");
-        proprietaryFee = newFee;
+        proprietaryFeeL2 = newFee;
         emit ProprietaryFeeUpdated(newFee);
     }
 
