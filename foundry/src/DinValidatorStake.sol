@@ -24,7 +24,7 @@ contract DinValidatorStake is Ownable, ReentrancyGuardTransient {
 
     using SafeERC20 for IERC20;
 
-    // ✅ Proper decimal scaling: 1M DIN tokens with 18 decimals
+    // ✅ Proper decimal scaling: 10 DIN tokens with 18 decimals
     uint256 public constant MIN_STAKE = 10 * 1e18;
     mapping(address => bool) public slasherContracts;
 

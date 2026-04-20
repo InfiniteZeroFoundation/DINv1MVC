@@ -127,6 +127,11 @@ def welcome():
     """Print welcome message."""
     typer.echo("Welcome to DIN CLI!")
 
+@app.command("cache-dir")
+def cache_dir():
+    """Print the path to the cache directory."""
+    typer.echo(f"[bold green]Cache Directory:[/bold green] {CACHE_DIR}")
+
 @app.command("init")
 def initialize():
     """Initialize DIN CLI by creating config/cache directories and an empty config file."""
@@ -349,6 +354,7 @@ def connect_wallet(ctx: typer.Context,
     console.print(f"[green] ⚙️  Connecting wallet... to new account[/green]")
     
     demo_mode = get_config("demo_mode")
+
     
     if account is not None and demo_mode:
         # Load from demo accounts
