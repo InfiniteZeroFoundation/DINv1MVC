@@ -65,29 +65,11 @@ dincli model-owner add-slasher --taskAuditor [--contract <task_coordinator_addre
 
 **Manifest file**
 
-The manifest is a JSON file containing the metadata for your model and task. It must be placed at:
-
-```
-<project_root>/tasks/<network>/task_<coordinator_address>/manifest.json
-```
-
-If the file is absent when the genesis setup runs, it is automatically created with default values from the default manifest CID (`QmQaPUfVAyQBrkRvHZWyH8tbNukmcgEmghYFGZA6LKo8tp`).
+The manifest is a JSON file containing the metadata for your model and task. For the full schema, field descriptions, and an example, see [manifest.md](manifest.md).
 
 **Service files**
 
-The Model Owner must provide a set of service files tailored to the task. These files implement the task-specific logic for each participant role:
-
-| File | Role |
-|---|---|
-| `modelowner.py` | Model Owner |
-| `model.py` | Model Architect |
-| `client.py` | Client |
-| `aggregator.py` | Aggregator |
-| `auditor.py` | Auditor |
-
-Sample service files are located in the `devnet/cache_model_0/services/` directory.
-
-The service files must be uploaded to IPFS and the CID must be included in the manifest file at appropriate fields.
+The Model Owner must provide a set of service files tailored to the task. For detailed documentation on each service file and the required function signatures, see [services.md](services.md).
 
 ---
 

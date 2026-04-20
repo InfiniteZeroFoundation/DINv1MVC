@@ -127,187 +127,37 @@ dincli model-owner add-slasher --taskAuditor
 
 After this step, model owner can proceed to the next step in the model workflow.
 
-## 6. Create manifest - Model Owner
+## 6. Create Manifest & Services - Model Owner
 
-Model Owner creates a manifest file for the model. Creating a manifest file involves some steps.
+Before registering the model, the Model Owner must prepare the service files and manifest.
 
+### 6.1. Create Services
 
-### 6.1. Create services - Model Owner
+The Model Owner must provide Python service files that implement task-specific logic for each participant role:
 
-Model Owner creates services for the model. These services are python scripts that will be used by different actors/stakeholders in the DIN Protocol. DIN Protocol provides a template for each service. 
+| File | Role |
+|---|---|
+| `model.py` | Defines the model architecture |
+| `modelowner.py` | Model Owner functions (genesis model, scoring, audit test data) |
+| `client.py` | Client training and model submission |
+| `auditor.py` | Model evaluation and scoring |
+| `aggregator.py` | T1 and T2 aggregation |
 
-> [!NOTE]
-> The Model Owner can use the templates provided by the DIN Protocol to create the services. It is upto the model owner to define the actual logic of the services but certain functions must be implemented as per the DIN Protocol specifications. The DIN-Protocol team can help Model Owner to create the custom services. Model Onwer can use torch/tensorflow/keras or any other framework to create the model and related services.
+Each service file must be uploaded and pinned to IPFS. The resulting CID is referenced in the manifest file.
 
+> For detailed documentation on each service file and required function signatures, see [services.md](services.md).
 
-1. `model.py` to define model architecture
-2. `modelowner.py` for model owner
-3. `client.py` for clients
-4. `auditor.py` for auditors
-5. `aggregator.py` for aggregators
+### 6.2. Create Manifest File
 
-#### 6.1.1. `model.py`
+The manifest is a JSON file containing model metadata, contract addresses, and service entries. It must be placed at:
 
-This service is to define the model architecture. 
-`ModelArchitecture` class should be defined to define the model architecture where `__init__` and `forward` methods are implemented. 
-
-The model owner should upload and pin the model.py file to IPFS and get the IPFS CID of the model.py file. Model Owner should add the following entry in the manifest file where the `ipfs` is the IPFS CID of the model.py file and `stakeholders` is the list of stakeholders that will use this service.
-
-```json
-    "ModelArchitecture": {
-        "type": "custom",
-        "path": "services/model.py",
-        "ipfs": "QmXvkKtoHHBAMGNCLEqsvt6mPJS7G7shHKj6U1HZ8Ha4Ly",
-        "stakeholders": [
-            "modelowner",
-            "auditors",
-            "aggregators",
-            "clients"
-        ]
-    },
+```
+<root_dir>/tasks/<network>/task_<coordinator_address>/manifest.json
 ```
 
-#### 6.1.2. `modelowner.py`
+> For the full manifest schema, field descriptions, and an example manifest, see [manifest.md](manifest.md).
 
-This service is used to define the functions that will be used by the model owner to interact with the DIN Protocol for this model. 
-
-
-1. `getGenesisModelIpfs(base_path)`: This function is used to get the genesis model. It takes the base path as an argument and returns the IPFS CID of the genesis model. 
-    > The model owner should upload and pin the modelowner.py file to IPFS and get the IPFS CID of the model.py file. Model Owner should add the following entry in the manifest file where the `ipfs` is the IPFS CID of the model.py file and `stakeholders` is the list of stakeholders that will use this service.
-
-```json
-    "getGenesisModelIpfs": {
-        "type": "custom",
-        "path": "services/modelowner.py",
-        "ipfs": "QmWvssDTW1YpQjaVi6eZoMUuAUTxmKhkxKR1suJ4FNYWee",
-        "stakeholders": [
-            "modelowner"
-        ]
-    },
-```
-
-2. `getscoreforGM(gi, gmcid, base_path)`: This function is used to get the score for the global model. It takes the global iteration index, model CID, and base path as arguments and returns the score for the global model. 
-    > The model owner should upload and pin the modelowner.py file to IPFS and get the IPFS CID of the model.py file. Model Owner should add the following entry in the manifest file where the `ipfs` is the IPFS CID of the model.py file and `stakeholders` is the list of stakeholders that will use this service.
-
-```json
-    "getscoreforGM": {
-        "type": "custom",
-        "path": "services/modelowner.py",
-        "ipfs": "QmWvssDTW1YpQjaVi6eZoMUuAUTxmKhkxKR1suJ4FNYWee",
-        "stakeholders": [
-            "modelowner"
-        ]
-    },
-```
-
-3. `create_audit_testDataCIDs(batch_counts, gi, base_path, test_data_path)`: This function is used to create the audit test data CIDs. It takes the number of audit batches to create, global iteration index, base path, and test data path as arguments and returns the audit test data CIDs. The `testData_percentage_per_auditor_batch` is the percentage of test data that will be used for each auditor batch and is 5%. 
-    > The model owner should upload and pin the modelowner.py file to IPFS and get the IPFS CID of the model.py file. Model Owner should add the following entry in the manifest file where the `ipfs` is the IPFS CID of the model.py file and `stakeholders` is the list of stakeholders that will use this service.
-
-```json
-    "create_audit_testDataCIDs": {
-        "type": "custom",
-        "path": "services/modelowner.py",
-        "ipfs": "QmWvssDTW1YpQjaVi6eZoMUuAUTxmKhkxKR1suJ4FNYWee",
-        "stakeholders": [
-            "modelowner"
-        ]
-    },
-```
-
-#### 6.1.3. `client.py`
-
-This service is used to define the functions that will be used by the clients to interact with the DIN Protocol for this model. 
-
-1. `train_client_model_and_upload_to_ipfs(genesis_model_ipfs_hash, account_address, effective_network="local", initial_model_ipfs_hash=None, dp_mode="disabled", model_base_dir="", gi=None,)` is used to train the client model and upload it to IPFS. It takes the genesis model IPFS hash, account/client address, effective network, initial model IPFS hash, differential privacy mode, model base directory, and global iteration index as arguments and returns the client model IPFS hash.
-
-Model Owner may/ or may not define the Differential Privacy (DP) logic for the model. If the model owner defines the DP logic for the model and set `dp_mode: "enabled"` in manifest file, then the client model will be trained with the DP mode using the DP logic defined in the client.py file. 
-
-    > The model owner should upload and pin the client.py file to IPFS and get the IPFS CID of the client.py file. Model Owner should add the following entry in the manifest file where the `ipfs` is the IPFS CID of the client.py file and `stakeholders` is the list of stakeholders that will use this service.
-
-```json
-    "train_client_model_and_upload_to_ipfs": {
-        "type": "custom",
-        "path": "services/client.py",
-        "ipfs": "QmWvssDTW1YpQjaVi6eZoMUuAUTxmKhkxKR1suJ4FNYWee",
-        "stakeholders": [
-            "clients"
-        ]
-    },
-```
-
-
-#### 6.1.4. `auditor.py`
-
-This service is used to define the functions that will be used by the auditors to interact with the DIN Protocol for this model. 
-
-1. `Score_model_by_auditor(gi, genesis_model_cid, batch_id, model_index, auditor_address, testDataCID, lm_cid, model_base_dir)` is used to score the model by the auditor. It takes the global iteration index, genesis model IPFS hash, batch index, model index, auditor address, test data CID, local model IPFS hash, and model base directory as arguments and returns the score and eligibility for the local model.
-    > The model owner should upload and pin the auditor.py file to IPFS and get the IPFS CID of the auditor.py file. Model Owner should add the following entry in the manifest file where the `ipfs` is the IPFS CID of the auditor.py file and `stakeholders` is the list of stakeholders that will use this service.
-
-```json
-    "Score_model_by_auditor": {
-        "type": "custom",
-        "path": "services/auditor.py",
-        "ipfs": "QmWvssDTW1YpQjaVi6eZoMUuAUTxmKhkxKR1suJ4FNYWee",
-        "stakeholders": [
-            "auditors"
-        ]
-    },
-```
-
-#### 6.1.5. `aggregator.py`
-
-This service is used to define the functions that will be used by the aggregators to interact with the DIN Protocol for this model. 
-
-1. `get_aggregated_cid_t1(curr_GI, aggregator_address, model_cids, genesis_model_ipfs_hash, bid, model_base_dir)` is used to aggregate the local models in T1 aggregation batch by the aggregator. It takes the global iteration index, aggregator address, local model cids, genesis model IPFS hash, batch index, and model base directory as arguments and returns the aggregated model IPFS hash.
-    > The model owner should upload and pin the aggregator.py file to IPFS and get the IPFS CID of the aggregator.py file. Model Owner should add the following entry in the manifest file where the `ipfs` is the IPFS CID of the aggregator.py file and `stakeholders` is the list of stakeholders that will use this service.
-
-```json
-    "get_aggregated_cid_t1": {
-        "type": "custom",
-        "path": "services/aggregator.py",
-        "ipfs": "QmWvssDTW1YpQjaVi6eZoMUuAUTxmKhkxKR1suJ4FNYWee",
-        "stakeholders": [
-            "aggregators"
-        ]
-    },
-```
-
-2. `get_aggregated_cid_t2(curr_GI, aggregator_address, model_cids, genesis_model_ipfs_hash, bid, model_base_dir)` is used to aggregate the local models in T2 aggregation batch by the aggregator. It takes the global iteration index, aggregator address, local model cids, genesis model IPFS hash, batch index, and model base directory as arguments and returns the aggregated model IPFS hash.
-    > The model owner should upload and pin the aggregator.py file to IPFS and get the IPFS CID of the aggregator.py file. Model Owner should add the following entry in the manifest file where the `ipfs` is the IPFS CID of the aggregator.py file and `stakeholders` is the list of stakeholders that will use this service.
-
-```json
-    "get_aggregated_cid_t2": {
-        "type": "custom",
-        "path": "services/aggregator.py",
-        "ipfs": "QmWvssDTW1YpQjaVi6eZoMUuAUTxmKhkxKR1suJ4FNYWee",
-        "stakeholders": [
-            "aggregators"
-        ]
-    },
-```
-
-
-### 6.2. Create manifest file
-
-Model Owner creates a manifest file for the model. In addition to above entries as per 6.1, the model owner should define following meta-data in manifest.json file
-
-1. `name` : name of the model
-2. `version`: version of the model
-3. `description`
-4. `author`
-5. `license`
-6. `model_type`: open source or proprietary
-7. `technical details`: technical details of the model
-8. `Genesis_Model_CID`: IPFS CID of the genesis model
-dp_mode
-DINTaskCoordinator_Contract
-DINTaskAuditor_Contract
-
-
-In addition to above entries, the model owner can define any custom fields in manifest.json file as per their requirements. The custom fields/parmeters can be used in services by accessing them via `get_manifest_key` function. The manifest and parameters can be updated as the model training progresses.
-Model Owner should place the manifest.json file at `<root_dir>/tasks/sepolia_op_devnet/<task_coordinator_contract_address>/manifest.json`.
-
-The model Owner can setup Markkdown guides specific to their model for clients, aggregators, auditors and other stakeholders in manifest.json file as `guides` field. (Example: `"guides": { "clients": "<client_guide_ipfs_hash>", "aggregators": "<aggregator_guide_ipfs_hash>", "auditors": "<auditor_guide_ipfs_hash>" }`)  
+  
 ## 7. Create and Submit Genesis Model - Model Owner
 
 Model Owner creates and submits the genesis model to the TaskCoordinator contract. 
