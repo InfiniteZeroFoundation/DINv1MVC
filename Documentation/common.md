@@ -97,17 +97,13 @@ dincli system read-wallet
 
 ### Utilities
 
-**Check balances** — show ETH and USDT for the connected wallet:
+**Check balances** — show ETH for the connected wallet:
 
 ```bash
-dincli system --eth-balance --usdt-balance
+dincli system --eth-balance
 ```
 
-**Buy USDT** (testnets / local only) — swap ETH for USDT via the Uniswap router:
 
-```bash
-dincli system buy-usdt <usdt_amount>
-```
 
 **Show contract addresses** — display the deployed coordinator, token, stake, and registry addresses for the current network:
 

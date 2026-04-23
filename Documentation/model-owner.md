@@ -22,24 +22,6 @@ The `--artifact` flag must point to the compiled Hardhat/Foundry JSON output (co
 
 ---
 
-### Deposit Rewards into the Task Auditor
-
-Fund the Task Auditor contract with USDT to be distributed as rewards.
-
-> **Prerequisites** — the following keys must be set in your `.env` file:
-> - `<NETWORK>_DINTaskCoordinator_Contract_Address`  
->   *(e.g. `SEPOLIA_OP_DEVNET_DINTaskCoordinator_Contract_Address`)*
-> - `<NETWORK>_<TASK_COORDINATOR_ADDRESS>_DINTaskAuditor_Contract_Address`  
->   *(e.g. `SEPOLIA_OP_DEVNET_0x1234...7890_DINTaskAuditor_Contract_Address`)*
-
-```bash
-dincli model-owner deposit-reward-in-dintask-auditor --amount <usdt_amount>
-```
-
-> [!TIP]
-> If you need USDT on a testnet or local network, use: `dincli system buy-usdt <usdt_amount>`
-
----
 
 ### Register Task Coordinator & Task Auditor as Slashers
 
