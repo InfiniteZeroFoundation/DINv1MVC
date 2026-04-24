@@ -6,7 +6,7 @@ from dincli.cli.auditor import app as auditor_app
 from dincli.cli.client import app as client_app
 from dincli.cli.context import DinContext
 from dincli.cli.core import GlobalOptionsGroup
-from dincli.cli.dindao import app as dindao_app
+# from dincli.cli.dindao import app as dindao_app
 from dincli.cli.ipfs import app as ipfs_app
 from dincli.cli.modelowner import app as model_owner_app
 # Import role-specific subcommands
@@ -21,7 +21,7 @@ app = typer.Typer(
 
 # Add subcommands for roles
 app.add_typer(system_app, name="system")
-app.add_typer(dindao_app, name="dindao")
+# app.add_typer(dindao_app, name="dindao")
 app.add_typer(model_owner_app, name="model-owner")
 app.add_typer(aggregators_app, name="aggregator")
 app.add_typer(auditor_app, name="auditor")
