@@ -7,7 +7,7 @@ from getpass import getpass
 from importlib.resources import files
 from pathlib import Path
 from typing import Optional
-
+from rich.console import Console
 import numpy as np
 import torch
 import typer
@@ -100,7 +100,7 @@ def initialize():
     if not CONFIG_FILE.exists():
         # Write an empty JSON object (valid JSON)
         CONFIG_FILE.write_text("{}\n", encoding="utf-8")
-        console.print(f"[green]✅ Created empty config file at: {CONFIG_FILE}[/green]")
+        Console().print(f"[green]✅ Created empty config file at: {CONFIG_FILE}[/green]")
  
 @app.command("configure-network")
 def configure_network(ctx: typer.Context):
