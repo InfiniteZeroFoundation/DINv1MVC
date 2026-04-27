@@ -88,10 +88,15 @@ def welcome():
     """Print welcome message."""
     typer.echo("Welcome to DIN CLI!")
 
-@app.command("cache-dir")
-def cache_dir():
+@app.command("get-cache-dir")
+def get_cache_dir():
     """Print the path to the cache directory."""
     typer.echo(f"[bold green]Cache Directory:[/bold green] {CACHE_DIR}")
+
+@app.command("get-config-dir")
+def get_config_dir():
+    """Print the path to the config directory."""
+    typer.echo(f"[bold green]Config Directory:[/bold green] {CONFIG_DIR}")
 
 @app.command("init")
 def initialize():

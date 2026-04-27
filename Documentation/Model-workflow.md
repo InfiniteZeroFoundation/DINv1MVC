@@ -304,7 +304,7 @@ dincli client lms show-models <model_id>
 > [!IMPORTANT]
 > The client local training data must be  located at `<CACHE_DIR>/sepolia_op_devnet/model_<model_id>/dataset/clients/<account_address>/data.pt`
 > where `CACHE_DIR` is the path to the cache directory of the dincli.
-> and can be found by running the command `dincli system cache-dir`.
+> and can be found by running the command `dincli system get-cache-dir`.
 
 **Model Owner** reviews submissions and closes LMS:
 
@@ -339,7 +339,7 @@ dincli model-owner lms-evaluation show <model_id> --auditors --models
 > [NOTE]
 > The test dataset  must be located at `<CACHE_DIR>/sepolia_op_devnet/model_<model_id>/dataset/test/test_dataset.pt` for model owner.
 > where `CACHE_DIR` is the path to the cache directory of the dincli.
-> and can be found by running the command `dincli system cache-dir`.
+> and can be found by running the command `dincli system get-cache-dir`.
 
 **Auditors** evaluate their assigned batches (repeat for each auditor):
 

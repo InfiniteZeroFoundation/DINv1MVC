@@ -7,7 +7,7 @@ Hi Client, Welcome to the decentralized AI training platform! You are about to p
 ## Pre-requisites
 
 - Ensure you have the `dincli` installed and configured on your system.
-- The client local training data must be  located at `<CACHE_DIR>/sepolia_op_devnet/model_<model_id>/dataset/clients/<account_address>/data.pt` where `CACHE_DIR` is the path to the cache directory of the dincli. and can be found by running the command `dincli system cache-dir`.
+- The client local training data must be  located at `<CACHE_DIR>/sepolia_op_devnet/model_<model_id>/dataset/clients/<account_address>/data.pt` where `CACHE_DIR` is the path to the cache directory of the dincli. and can be found by running the command `dincli system get-cache-dir`.
 
 ## Dataset Format
 
