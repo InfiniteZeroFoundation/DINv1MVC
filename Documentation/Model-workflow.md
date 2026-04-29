@@ -425,7 +425,7 @@ Any malicious or non-performing actors (auditors or aggregators) are penalized, 
 
 ```bash
 # show current state
-dincli model-owner gi show-state <model_id>
+dincli task gi show-state <model_id>
 # slash auditors
 dincli model-owner slash auditors <model_id>
 # slash aggregators

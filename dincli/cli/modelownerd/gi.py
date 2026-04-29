@@ -264,24 +264,6 @@ def show_registered_aggregators(
     console.print("[green]✓ Registered aggregators shown![/green]")
 
 
-@gi_app.command()
-def show_state(
-    ctx: typer.Context,
-    model_id: str = typer.Argument(..., help="Model ID"),
-    gi: int = typer.Option(None, "--gi", help="Global iteration number"),
-):
-    effective_network, w3, account, console = ctx.obj.get_en_w3_account_console(model_id)
-    
-    task_coordinator = ctx.obj.get_deployed_din_task_coordinator_contract(True, model_id)
-    
-    curr_GI, curr_GIstate = ctx.obj.get_current_gi_and_state(task_coordinator)
-
-    target_gi = ctx.obj.validate_gi_ET_curr_GI(gi, curr_GI)
-
-    console.print(f"[bold green]Showing global iteration state for global iteration {curr_GI}[/bold green]")
-    console.print(f"[cyan]Global iteration numerical state:[/cyan] {curr_GIstate}")
-    console.print(f"[cyan]Global iteration state:[/cyan] {GIstateToStr(curr_GIstate)}")
-    console.print("[green]✓ Global iteration state shown![/green]")
 
 @reg_app.command("auditors-close", help="Close auditors registration")
 def auditors_close(

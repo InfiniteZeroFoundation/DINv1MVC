@@ -4,17 +4,18 @@ import json
 import typer
 from web3 import Web3
 
-from dincli.cli.utils import cache_manifest, get_env_key
+from dincli.cli.utils import cache_manifest, get_env_key, GIstateToStr
 from dincli.services.ipfs import upload_to_ipfs
 from dincli.services.cid_utils import get_bytes32_from_cid, get_cid_from_bytes32
 
 app = typer.Typer(help="Manage DIN tasks/models across networks.")
 
 model_owner_app = typer.Typer( help="model owner commands")
+gi_app = typer.Typer(help="Global iteration commands")
 
 
 app.add_typer(model_owner_app, name="model-owner")
-
+app.add_typer(gi_app, name="gi")
 
 
 # @app.command()
@@ -112,6 +113,9 @@ app.add_typer(model_owner_app, name="model-owner")
 #     network: str = typer.Option(None, "--network", help="Target network (local|sepolia|mainnet)"),
 # )
 
+
+
+
 @app.command()
 def explore(
     ctx: typer.Context,
@@ -125,6 +129,31 @@ def explore(
 
     cache_manifest(model_id, effective_network, True, update, True)
     
+
+@gi_app.command("show-state")
+def show_state(
+    ctx: typer.Context,
+    model_id: str = typer.Argument(..., help="Model ID"),
+    gi: int = typer.Option(None, "--gi", help="Global iteration number"),
+):
+    """
+    Show the state of a global iteration.
+    """
+    effective_network, w3, account, console = ctx.obj.get_en_w3_account_console(model_id)
+    
+    task_coordinator = ctx.obj.get_deployed_din_task_coordinator_contract(True, model_id)
+    
+    curr_GI, curr_GIstate = ctx.obj.get_current_gi_and_state(task_coordinator)
+
+    target_gi = ctx.obj.validate_gi_ET_curr_GI(gi, curr_GI)
+
+    console.print(f"[bold green]Showing global iteration state for global iteration {curr_GI}[/bold green]")
+    console.print(f"[cyan]Global iteration numerical state:[/cyan] {curr_GIstate}")
+    console.print(f"[cyan]Global iteration state:[/cyan] {GIstateToStr(curr_GIstate)}")
+    console.print("[green]✓ Global iteration state shown![/green]")
+
+
+
 @model_owner_app.command("register") 
 def register(
     ctx: typer.Context,

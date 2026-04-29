@@ -285,7 +285,7 @@ dincli model-owner gi end <model_id> [--gi <gi_index>]
 View the full status of the current Global Iteration.
 
 ```bash
-dincli model-owner gi show-state <model_id>
+dincli task gi show-state <model_id>
 ```
 
 ### View All Submissions
