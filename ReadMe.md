@@ -22,7 +22,7 @@ This project consists of multiple components:
 
 ## Aggregator / Validator Setup
 
-For step-by-step guidance on how to register as an aggregator (validator), please refer to the following documentation:  
+For step-by-step guidance on how to register as an aggregator (validator), please refer to the documentation:  
 https://github.com/InfiniteZeroFoundation/DevNet/blob/main/Documentation/GettingStarted.md
 
 ---
@@ -41,7 +41,7 @@ To configure the IPFS API, please see [dincli Documentation](Documentation/setup
 
 ## Learn More
 
-- [White Paper](#)
-- [Documentation](#)
+- [White Paper](https://github.com/InfiniteZeroFoundation/White-Paper)
+- [Documentation](https://github.com/InfiniteZeroFoundation/DevNet/blob/main/Documentation/GettingStarted.md)
 - [API Reference](#)
 - [SDK](#)
