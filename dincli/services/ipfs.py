@@ -66,13 +66,13 @@ def upload_to_ipfs(file_path, msg=None):
         file_content = f.read()
 
     config = _get_config()
-    ipfs_api_url_add, _ = _get_ipfs_urls()
     provider = config.get("ipfs_provider", "ipfs node")
+    if not provider == "filebase":
+        ipfs_api_url_add, _ = _get_ipfs_urls()
     cid = None
 
     try:
         if provider is None or provider == "ipfs node":
-            # Raw IPFS node (self-hosted/Infura)
 
             if not ipfs_api_url_add:
                 raise ValueError(f"IPFS API URL missing in {os.getcwd()}/.env as IPFS_API_URL_ADD ")
@@ -148,8 +148,10 @@ def retrieve_from_ipfs(hash_value, retrieved_file_path):
     safe_path.parent.mkdir(parents=True, exist_ok=True)
 
     config = _get_config()
-    _, ipfs_api_url_retrieve = _get_ipfs_urls()
     provider = config.get("ipfs_provider", "ipfs node")
+    if not provider == "filebase":
+        _, ipfs_api_url_retrieve = _get_ipfs_urls()
+    
     response = None
 
     logger.info(f"Retrieving CID: {hash_value} from {provider.title()}")

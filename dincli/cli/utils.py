@@ -491,11 +491,11 @@ def cache_manifest(model_id: int, network: str, info: bool = False, update: bool
             console.print("[bold green]Model Info :[/bold green]")
             console.print("Model Owner :", model_info[0])
             console.print("Is Open Source :", model_info[1])
-            console.print("Manifest CID (Bytes32) :", model_info[2])
-            console.print("Manifest CID (Bytes32) hex:", model_info[2].hex())
-            console.print("Manifest CID (Decoded) :", get_cid_from_bytes32(model_info[2].hex()))
-            console.print("Created At :", model_info[3])
-            console.print("Created At Human Readable :", datetime.fromtimestamp(model_info[3]).strftime("%Y-%m-%d %H:%M:%S %p"))  # am/pm
+            # console.print("Manifest CID (Bytes32) :", model_info[2])
+            # console.print("Manifest CID (Bytes32) hex:", model_info[2].hex())
+            console.print("Manifest CID :", get_cid_from_bytes32(model_info[2].hex()))
+            console.print("Created At (Unix Timestamp) :", model_info[3])
+            console.print("Created At :", datetime.fromtimestamp(model_info[3]).strftime("%Y-%m-%d %H:%M:%S %p"))  # am/pm
             console.print("Task Coordinator Address :", model_info[4])
             console.print("Task Auditor Address :", model_info[5])
             if genesis_model_info:

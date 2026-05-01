@@ -794,7 +794,7 @@ def configure_ipfs(ctx: typer.Context,
 
     save_config(config)
 
-    ctx.obj.console.print(f"[green]IPFS configured successfully: {provider} [/green]")
+    ctx.obj.console.print(f"[green]IPFS provider is now: {provider} [/green]")
    
 @app.command("get-proprietary-fee")
 def get_proprietary_fee(ctx: typer.Context):

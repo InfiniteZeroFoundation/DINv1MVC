@@ -40,14 +40,14 @@ Join the Signal group for:
 
 ---
 
-## ⚙️ Initial Setup
+## ⚙️ DIN CLI Installation and Setup
 
-Before participating, ensure your environment is correctly configured:
+Before participating, ensure your environment is correctly configured. Please read [setup.md](setup.md) for comprehensive details and guide to install dincli and configure your environment.
 
 ```bash
 # Initialize DIN CLI
 dincli system init
-````
+```
 
 ### 🔧 Required Configuration
 

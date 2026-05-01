@@ -23,7 +23,7 @@ source venv/bin/activate
 
 ## 2. Install `dincli`
 
-### Option A — Install from a Local Wheel
+### Option A — Install from a Downloaded Wheel
 
 ```bash
 # Download the wheel file
