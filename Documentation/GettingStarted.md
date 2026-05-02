@@ -414,4 +414,4 @@ ETH_PRIVATE_KEY_2 → ETH_PRIVATE_KEY_10
 
 ---
 
-> 🚀 You are now ready to participate in **Model_0** and contribute to decentralized AI on the Infinite Zero Network.
+> 🚀 You are now ready to participate in **Model_0** and contribute to decentralized AI on the InfiniteZero Network.
