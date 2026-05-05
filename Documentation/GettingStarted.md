@@ -1,99 +1,133 @@
-# 🚀 Getting Started with Model_0 on the Infinite Zero Network
+# Model_0 — Infinite Zero Network Protocol
 
-Welcome to the onboarding guide for **Model_0** on the Infinite Zero Network.
+Model_0 is the first instantiation of the **Infinite Zero Network**, a decentralized AI training and validation protocol secured by Ethereum smart contracts.
 
-A **Model Owner** has already deployed the model-specific smart contracts for this pioneer model (`ID: 0`).
-
-* ✅ **Global Iteration 1** has been successfully completed
-* 🔄 **Global Iteration 2** is currently in progress
-
-You are invited to participate in **Global Iteration 2 and beyond** by taking on one (or more) of the following roles:
-
-### 🎭 Available Roles
-
-1. **Aggregators**
-2. **Auditors**
-3. **Clients**
-
-> 💡 You may operate **multiple accounts** and simultaneously participate as a *Client*, *Auditor*, and/or *Aggregator*.
+The system coordinates distributed model training, aggregation, and validation through cryptoeconomic incentives and on-chain enforcement.
 
 ---
 
-## 💻 Compute Requirements
+## 🧭 Protocol Overview
 
-Running a node is lightweight — no specialized hardware required.
+Model_0 operates in **global iterations**, where each iteration defines a complete lifecycle of:
 
-### ✅ Minimum Requirements
+- Distributed training
+- Aggregation of model updates
+- Independent validation
+- On-chain finalization
 
-* **RAM:** 4 GB
-* **Disk:** ~30 GB free space
-* **CPU:** Standard (no GPU required)
-* **Environment:** Python 3 + `venv`
+### Current Status
 
-### 📦 Dependencies
-
-* `dincli`: a few MB
-* Python dependencies (e.g. PyTorch): ~2 GB
-
-> 💡 If you’ve set up a Python environment before, setup should take ~10–15 minutes.
+- ✅ Global Iteration 1 completed  
+- 🔄 Global Iteration 2 in progress  
 
 ---
 
-## ❓ Validator vs Miner (Important Clarification)
+## 🔐 Security Model (Ethereum-Enforced Protocol)
 
-This system does **not** use mining.
+The Infinite Zero Network is secured by **Ethereum smart contracts deployed on Sepolia OP Devnet**.
 
-Instead, it uses **role-based participation**, where different roles together function similarly to validators:
+Ethereum is the **source of truth for all protocol state transitions and economic enforcement**.
 
-* **Aggregators** → Aggregate model updates
-* **Auditors** → Evaluate and validate results
-* **Clients** → Train and submit models
+### On-chain responsibilities
 
-> 💡 **Aggregators + Auditors collectively act as validators**.
+- Participant registration (all roles)
+- Stake locking and slashing conditions (DIN token)
+- Global iteration state machine
+- Submission validation rules
+- Incentive distribution and finalization
 
-You are not mining blocks — you are contributing to **training and validating the model**.
+### System architecture
 
----
-
-## 🌐 Community Channels
-
-### 📢 Telegram Group
-
-Join the Telegram group https://t.me/+I4Tl7foCVwwwM2Vk for:
-
-* Announcements
-* Guidance
-* Community discussions
-
-> ⚠️ Active updates for **Model_0** are shared regularly — stay engaged.
+| Layer | Responsibility |
+|------|--------|
+| Ethereum (on-chain) | State, validation, incentives, enforcement |
+| IPFS (Filebase) | Dataset storage and distribution |
+| Off-chain compute | Training, aggregation, auditing |
+| Participants | Execute computation + submit results |
 
 ---
 
-### 🔐 Signal Group
+### Data availability layer (IPFS via Filebase)
 
-Join the Signal group:
-https://signal.group/#CjQKICVqJ0Ri3KGCZOsf8A3dhmg8GC_vc1MBmBrq0JV7lIr6EhBCOwElVHvE0swjO8kSk7ky
+The system uses **IPFS (via Filebase)** as its decentralized storage and distribution layer.
 
-* Announcements
-* Guidance
-* Community discussions
+It is responsible for:
 
-> ⚠️ Active updates for **Model_0** are shared regularly — stay engaged.
+- MNIST dataset distribution across clients
+- Client-specific dataset partitions
+- Storage of references to training data and artifacts
+
+> 💡 Ethereum does not store large datasets — IPFS ensures scalable, content-addressed data availability across participants.
 
 ---
 
-## ⚙️ DIN CLI Installation and Setup
+### Core guarantee
 
-Before participating, ensure your environment is correctly configured. Please read [setup.md](https://github.com/InfiniteZeroFoundation/DevNet/blob/main/Documentation/setup.md) for comprehensive setup instructions.
+The system is **fully verifiable end-to-end**:
+
+- Ethereum enforces correctness, incentives, and finality  
+- IPFS ensures reproducible and distributed data availability  
+- Off-chain compute enables scalable ML execution  
+
+> 💡 Trust is shifted from participants to cryptographic and economic enforcement.
+
+---
+
+## 🎭 Participation Model
+
+Participants interact through three composable roles:
+
+### Aggregators
+- Aggregate distributed model updates
+- Produce unified model states
+
+### Auditors
+- Independently evaluate submitted results
+- Validate correctness and consistency
+
+### Clients
+- Train local models on assigned datasets
+- Submit updates to the network
+
+> Roles are composable — a single participant may act as Client, Auditor, and Aggregator simultaneously.
+
+---
+
+## 🧠 Validator Model (No Mining)
+
+This system does **not use mining or Proof-of-Work**.
+
+Instead, it uses a **role-based validation system enforced by Ethereum**:
+
+- Aggregators propose model state transitions
+- Auditors verify correctness of outputs
+- Ethereum finalizes accepted results
+
+> Aggregators + Auditors collectively function as **validators**, with enforcement handled on-chain.
+
+---
+
+## 💻 System Requirements
+
+- RAM: 4 GB  
+- Disk: ~30 GB  
+- CPU: Standard (GPU not required)  
+- Python: 3.x with virtual environment  
+
+Dependencies:
+- `dincli`
+- ML runtime (~2 GB, e.g. PyTorch)
+
+---
+
+## ⚙️ Protocol Interaction (DIN CLI)
 
 ```bash
-# Initialize DIN CLI
 dincli system init
-```
 
 ---
 
-### 🔧 Required Configuration
+### 🔧 Configuration
 
 Set RPC URL in `.env`:
 
