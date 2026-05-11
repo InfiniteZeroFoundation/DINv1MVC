@@ -195,16 +195,6 @@ https://signal.group/#CjQKICVqJ0Ri3KGCZOsf8A3dhmg8GC_vc1MBmBrq0JV7lIr6EhBCOwElVH
 
 ---
 
-# Faucet Access (Sepolia Optimism)
-
-To participate in the Infinite Zero Network devnet, you will need Sepolia Optimism ETH for transaction fees.
-
-You can request Sepolia Optimism ETH from the following faucets:
-
-Here’s a more polished and professional version:
-
----
-
 ## Faucet Access (Sepolia Optimism)
 
 To participate in the Infinite Zero Network devnet, you will need Sepolia Optimism ETH for transaction fees.
