@@ -1,6 +1,6 @@
 # InfiniteZero Network — DevNet
 
-> **Open infrastructure for training AI as a public good.**
+> **Open infrastructure for a global AI commons.**
 
 InfiniteZero is building the commons for AI — the way the internet itself is a public good. Millions of devices contribute quietly to shared AI models, with raw data never leaving the user's device. Only anonymised, encrypted patterns join the network.
 
@@ -14,37 +14,41 @@ This repository contains the DevNet setup and tooling for developers and validat
 
 This project consists of multiple components:
 
-- **CLI**: `dincli` is a command line interface for interacting with the InfiniteZero Network  
-- **Hardhat / Foundry (Optional)**: Used for smart contract compilation and development  
-- **IPFS Provider**: Handles uploading and fetching of network artifacts  
+- **CLI**: `dincli` — command line interface for interacting with the InfiniteZero Network
+- **Hardhat / Foundry (Optional)**: Smart contract compilation and development
+- **IPFS Provider**: Handles uploading and fetching of network artifacts
 
 ---
 
-## Validator Setup
+## Quickstart
 
-For step-by-step guidance on how to register as an aggregator (validator), please refer to the documentation:  
-https://github.com/InfiniteZeroFoundation/DevNet/blob/main/Documentation/GettingStarted.md
+New here? Start with the validator setup guide:
 
----
-
-## How to Install dincli
-
-To install `dincli`, please see [dincli Documentation](Documentation/setup.md).
+[Getting Started →](https://github.com/InfiniteZeroFoundation/DevNet/blob/main/Documentation/GettingStarted.md)
 
 ---
 
-## Configure IPFS API
+## Install dincli
 
-To configure the IPFS API, please see [dincli Documentation](Documentation/setup.md).
+Full installation guide: [dincli Documentation](Documentation/setup.md)
+
+---
+
+## Configure IPFS
+
+Full configuration guide: [dincli Documentation](Documentation/setup.md)
 
 ---
 
 ## Contributing
 
-We use the `develop` branch for open-source contributions. Please review the contribution guide before opening a pull request:  
-https://github.com/InfiniteZeroFoundation/DevNet/blob/develop/Developer/CONTRIBUTING.md
+We use the `develop` branch for open-source contributions. Please review the contribution guide before opening a pull request:
 
-If you want a place to start, check the [Good first issues](https://github.com/InfiniteZeroFoundation/DevNet/blob/develop/Developer/GOOD_FIRST_ISSUES.md).
+[Contribution Guide →](https://github.com/InfiniteZeroFoundation/DevNet/blob/develop/Developer/CONTRIBUTING.md)
+
+Not sure where to start?
+
+[Good first issues →](https://github.com/InfiniteZeroFoundation/DevNet/blob/develop/Developer/GOOD_FIRST_ISSUES.md)
 
 ---
 
@@ -52,5 +56,14 @@ If you want a place to start, check the [Good first issues](https://github.com/I
 
 - [White Paper](https://github.com/InfiniteZeroFoundation/White-Paper)
 - [Documentation](https://github.com/InfiniteZeroFoundation/DevNet/blob/main/Documentation/GettingStarted.md)
-- [API Reference](#)
-- [SDK](#)
+- [Giveth — support the network](https://giveth.io/project/infinitezero-network)
+- [Say hello](mailto:abrahamnash@protonmail.com)
+
+---
+
+<div align="center">
+
+*InfiniteZero Foundation — open AI infrastructure, built by everyone, for everyone.*
+*Open protocol · Community governed · © 2026*
+
+</div>
