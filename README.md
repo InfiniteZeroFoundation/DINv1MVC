@@ -47,15 +47,9 @@ New here? Start with the validator setup guide:
 
 ---
 
-## Install dincli
+## Setup
 
-Full installation guide: [dincli Documentation](Documentation/setup.md)
-
----
-
-## Configure IPFS
-
-Full configuration guide: [dincli Documentation](Documentation/setup.md)
+Full installation and IPFS configuration guide: [dincli Documentation](Documentation/setup.md)
 
 ---
 
