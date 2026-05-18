@@ -2,6 +2,7 @@ import json
 import os
 import re
 import time
+from dataclasses import dataclass
 from datetime import datetime
 from getpass import getpass
 from importlib.resources import files
@@ -29,6 +30,20 @@ WALLET_FILE = CONFIG_DIR / "wallet.json"
 MIN_STAKE = 10*10**18 
 
 ALLOWED_NETWORKS = ["local", "sepolia_devnet", "sepolia_op_devnet", "mainnet"] # "sepolia_testnet"
+SUPPORTED_IPFS_PROVIDERS = ("env", "filebase", "custom")
+
+LEGACY_IPFS_PROVIDER_ALIASES = {
+    "": "env",
+    "default": "env",
+    "env": "env",
+    "ipfs node": "env",
+    "ipfs-node": "env",
+    "node": "env",
+}
+
+FILEBASE_IPFS_ADD_URL = "https://rpc.filebase.io/api/v0/add"
+FILEBASE_IPFS_CAT_URL = "https://rpc.filebase.io/api/v0/cat"
+FILEBASE_IPFS_PIN_URL = "https://rpc.filebase.io/api/v0/pin/add"
 
 
 # Optional: only import dotenv if needed
@@ -37,6 +52,16 @@ try:
     HAS_DOTENV = True
 except ImportError:
     HAS_DOTENV = False
+
+
+@dataclass(frozen=True)
+class IPFSConfig:
+    provider: str = "env"
+    api_url_add: Optional[str] = None
+    api_url_retrieve: Optional[str] = None
+    api_key: Optional[str] = None
+    api_secret: Optional[str] = None
+    service_path: Optional[Path] = None
 
 
 def save_config(data):
@@ -63,6 +88,22 @@ def load_config():
 def get_config(key, default=None):
     config = load_config()
     return config.get(key, default)
+
+
+def _clean_optional_string(value: Optional[str]) -> Optional[str]:
+    if not isinstance(value, str):
+        return None
+
+    stripped = value.strip()
+    return stripped or None
+
+
+def normalize_ipfs_provider(provider: Optional[str]) -> str:
+    if provider is None:
+        return "env"
+
+    normalized = provider.strip().lower()
+    return LEGACY_IPFS_PROVIDER_ALIASES.get(normalized, normalized)
     
 def resolve_network(cli_network: str | None = None, default: str = "local") -> str:
     """
@@ -84,23 +125,20 @@ def resolve_network(cli_network: str | None = None, default: str = "local") -> s
 
 def resolve_ipfs_config():
     """
-    Resolve ipfs config
+    Resolve the effective IPFS runtime configuration.
     """
-    default = "local"
+    config = load_config()
+    provider = normalize_ipfs_provider(config.get("ipfs_provider"))
+    raw_service_path = _clean_optional_string(config.get("ipfs_service_path"))
 
-    ipfs_api_url_add = "None"
-    ipfs_api_url_retrieve = "None"
-
-    # 2. Check .env (ignore empty strings)
-    from_env = get_env_key("ipfs_api_url_add".upper())
-    if from_env and isinstance(from_env, str) and from_env.strip():
-        ipfs_api_url_add = from_env.strip()
-
-    from_env = get_env_key("ipfs_api_url_retrieve".upper())
-    if from_env and isinstance(from_env, str) and from_env.strip():
-        ipfs_api_url_retrieve = from_env.strip()
-
-    return ipfs_api_url_add, ipfs_api_url_retrieve
+    return IPFSConfig(
+        provider=provider,
+        api_url_add=_clean_optional_string(get_env_key("IPFS_API_URL_ADD", verbose=False)),
+        api_url_retrieve=_clean_optional_string(get_env_key("IPFS_API_URL_RETRIEVE", verbose=False)),
+        api_key=_clean_optional_string(config.get("ipfs_api_key")),
+        api_secret=_clean_optional_string(config.get("ipfs_api_secret")),
+        service_path=Path(raw_service_path).expanduser().resolve() if raw_service_path else None,
+    )
 
 
 def get_env_key(key: str, default: Optional[str] = None, verbose: bool = True) -> Optional[str]:

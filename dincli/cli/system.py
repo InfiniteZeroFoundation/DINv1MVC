@@ -17,8 +17,10 @@ from torchvision import datasets, transforms
 
 from dincli.cli.contract_utils import erc20_abi, router_abi
 from dincli.cli.utils import (CACHE_DIR, CONFIG_DIR, CONFIG_FILE,
-                              _get_password, get_config, get_demo_private_key,
-                              get_env_key, load_config, load_din_info, save_config)
+                              SUPPORTED_IPFS_PROVIDERS, _get_password,
+                              get_config, get_demo_private_key, get_env_key,
+                              load_config, load_din_info, normalize_ipfs_provider,
+                              resolve_ipfs_config, save_config)
 
 dataset_app = typer.Typer(help="Manage federated datasets.")
 
@@ -525,30 +527,49 @@ def todo(
         else:
             console.print(f"[green]✅ RPC URL found in environment variable: {rpc_env_key} in {cwd}/.env file[/green]")
 
-    if get_env_key("IPFS_API_URL_ADD", None, False) is None:
-        console.print(
-            f"[red]❌ IPFS API ADD URL not found.[/red]\n"
-            f"Please define [bold]IPFS_API_URL_ADD[/bold] in your [.env] file:\n"
-            f"  → File path: [cyan]{cwd}/.env[/cyan]\n"
-            f"  → Example value:\n"
-            f"      IPFS_API_URL_ADD=http://localhost:5001/api/v0\n"
-            f"\n"
-            f"[dim]🔒 Important: Never commit [.env] to version control.[/dim]"
-        )
+    ipfs_config = resolve_ipfs_config()
+    console.print(f"[green]✅ Active IPFS provider: {ipfs_config.provider}[/green]")
+
+    if ipfs_config.provider == "env":
+        if ipfs_config.api_url_add is None:
+            console.print(
+                f"[red]❌ IPFS API ADD URL not found.[/red]\n"
+                f"Please define [bold]IPFS_API_URL_ADD[/bold] in your [.env] file:\n"
+                f"  → File path: [cyan]{cwd}/.env[/cyan]\n"
+                f"  → Example value:\n"
+                f"      IPFS_API_URL_ADD=http://localhost:5001/api/v0\n"
+                f"\n"
+                f"[dim]🔒 Important: Never commit [.env] to version control.[/dim]"
+            )
+        else:
+            console.print(f"[green]✅ IPFS API ADD URL found in environment variable: IPFS_API_URL_ADD in {cwd}/.env file with value: {ipfs_config.api_url_add}[/green]")
+
+        if ipfs_config.api_url_retrieve is None:
+            console.print(
+                f"[red]❌ IPFS API RETRIEVE URL not found.[/red]\n"
+                f"Please define [bold]IPFS_API_URL_RETRIEVE[/bold] in your [.env] file:\n"
+                f"  → File path: [cyan]{cwd}/.env[/cyan]\n"
+                f"  → Example value:\n"
+                f"      IPFS_API_URL_RETRIEVE=http://localhost:5001/api/v0\n"
+                f"\n"
+                f"[dim] Important: Never commit [.env] to version control.[/dim]"
+            )
+        else:
+            console.print(f"[green]✅ IPFS API RETRIEVE URL found in environment variable: IPFS_API_URL_RETRIEVE in {cwd}/.env file with value: {ipfs_config.api_url_retrieve}[/green]")
+    elif ipfs_config.provider == "filebase":
+        if ipfs_config.api_key is None:
+            console.print("[red]❌ Filebase API key not found in dincli config. Run `dincli system configure-ipfs --provider filebase --api-key <token>`.[/red]")
+        else:
+            console.print("[green]✅ Filebase API key found in dincli config.[/green]")
+    elif ipfs_config.provider == "custom":
+        if ipfs_config.service_path is None:
+            console.print("[red]❌ Custom IPFS service path not found in dincli config. Run `dincli system configure-ipfs --provider custom --service-path <path>`.[/red]")
+        elif not ipfs_config.service_path.exists():
+            console.print(f"[red]❌ Custom IPFS service path does not exist: {ipfs_config.service_path}[/red]")
+        else:
+            console.print(f"[green]✅ Custom IPFS service found at: {ipfs_config.service_path}[/green]")
     else:
-        console.print(f"[green]✅ IPFS API ADD URL found in environment variable: IPFS_API_URL_ADD in {cwd}/.env file with value: {get_env_key('IPFS_API_URL_ADD', None, False)}[/green]")
-    if get_env_key("IPFS_API_URL_RETRIEVE", None, False) is None:
-        console.print(
-            f"[red]❌ IPFS API RETRIEVE URL not found.[/red]\n"
-            f"Please define [bold]IPFS_API_URL_RETRIEVE[/bold] in your [.env] file:\n"
-            f"  → File path: [cyan]{cwd}/.env[/cyan]\n"
-            f"  → Example value:\n"
-            f"      IPFS_API_URL_RETRIEVE=http://localhost:5001/api/v0\n"
-            f"\n"
-            f"[dim] Important: Never commit [.env] to version control.[/dim]"
-        )
-    else:
-        console.print(f"[green]✅ IPFS API RETRIEVE URL found in environment variable: IPFS_API_URL_RETRIEVE in {cwd}/.env file with value: {get_env_key('IPFS_API_URL_RETRIEVE', None, False)}[/green]")    
+        console.print(f"[red]❌ Unsupported IPFS provider in config: {ipfs_config.provider}[/red]")
     
     if client:
         if not model_id:
@@ -765,36 +786,59 @@ def dump_abi(
 # dincli system
 @app.command("configure-ipfs")
 def configure_ipfs(ctx: typer.Context,
-    provider: str = typer.Option(None, "--provider", "-p", help="IPFS application name [filebase, custom]"),
-    api_key: str = typer.Option(None, "--api-key", "-k", help="API key"),
-    api_secret: str = typer.Option(None, "--api-secret", "-s", help="API secret"),
+    provider: str = typer.Option(None, "--provider", "-p", help="IPFS provider [env, filebase, custom]"),
+    api_key: str = typer.Option(None, "--api-key", "-k", help="API key for the selected provider"),
+    api_secret: str = typer.Option(None, "--api-secret", "-s", help="Optional API secret for the selected provider"),
+    service_path: Path = typer.Option(None, "--service-path", help="Python module implementing upload_to_ipfs and retrieve_from_ipfs for the custom provider"),
    ):
 
     config = load_config()
-    
-    if not provider: 
-        ctx.obj.console.print("[red]❌ Please specify a provider.[/red]")
+    configured_provider = normalize_ipfs_provider(config.get("ipfs_provider"))
+
+    if provider is None and api_key is None and api_secret is None and service_path is None:
+        active = resolve_ipfs_config()
+        ctx.obj.console.print(f"[green]Active IPFS provider:[/green] {active.provider}")
+        if active.provider == "env":
+            ctx.obj.console.print("[cyan]Source:[/cyan] `IPFS_API_URL_ADD` and `IPFS_API_URL_RETRIEVE` from the current shell or .env")
+        elif active.provider == "filebase":
+            ctx.obj.console.print("[cyan]Source:[/cyan] Filebase token stored in dincli config")
+        elif active.provider == "custom":
+            ctx.obj.console.print(f"[cyan]Source:[/cyan] {active.service_path}")
+        raise typer.Exit()
+
+    selected_provider = normalize_ipfs_provider(provider) if provider is not None else configured_provider
+    if selected_provider not in SUPPORTED_IPFS_PROVIDERS:
+        ctx.obj.console.print(f"[red]❌ Invalid provider. Use {', '.join(SUPPORTED_IPFS_PROVIDERS)}.[/red]")
         raise typer.Exit(1)
 
-    configured_providers = {"filebase", "custom"}
+    existing_api_key = config.get("ipfs_api_key")
+    existing_service_path = config.get("ipfs_service_path")
 
-    if provider:
-        if provider not in configured_providers:
-            ctx.obj.console.print(f"[red]❌ Invalid provider. Use {' , '.join(configured_providers)}.[/red]")
-            raise typer.Exit(1)
-        if provider == "filebase" and not api_key:
-            ctx.obj.console.print("[red]❌ Please specify an API key for filebase provider.[/red]")
-            raise typer.Exit(1)
-        config["ipfs_provider"] = provider
+    if selected_provider == "filebase" and not (api_key or existing_api_key):
+        ctx.obj.console.print("[red]❌ Please specify an API key for the Filebase provider.[/red]")
+        raise typer.Exit(1)
+    if selected_provider == "custom" and not (service_path or existing_service_path):
+        ctx.obj.console.print("[red]❌ Please specify --service-path for the custom provider.[/red]")
+        raise typer.Exit(1)
 
-    if api_key:
-        config["ipfs_api_key"] = api_key
-    if api_secret:
-        config["ipfs_api_secret"] = api_secret
+    config["ipfs_provider"] = selected_provider
+
+    if api_key is not None:
+        config["ipfs_api_key"] = api_key.strip()
+    if api_secret is not None:
+        config["ipfs_api_secret"] = api_secret.strip()
+    if service_path is not None:
+        config["ipfs_service_path"] = str(service_path.expanduser().resolve())
 
     save_config(config)
 
-    ctx.obj.console.print(f"[green]IPFS provider is now: {provider} [/green]")
+    ctx.obj.console.print(f"[green]IPFS provider is now: {selected_provider}[/green]")
+    if selected_provider == "env":
+        ctx.obj.console.print("[cyan]Runtime source:[/cyan] `IPFS_API_URL_ADD` and `IPFS_API_URL_RETRIEVE` from the current shell or .env")
+    elif selected_provider == "filebase":
+        ctx.obj.console.print("[cyan]Runtime source:[/cyan] Filebase RPC API token stored in dincli config")
+    elif selected_provider == "custom":
+        ctx.obj.console.print(f"[cyan]Runtime source:[/cyan] {config['ipfs_service_path']}")
    
 @app.command("get-proprietary-fee")
 def get_proprietary_fee(ctx: typer.Context):
