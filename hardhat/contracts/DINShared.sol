@@ -40,7 +40,15 @@ enum GIstates {
 interface IDinValidatorStake {
     function getStake(address validator) external view returns (uint256);
 
-    function slash(address validator, uint256 amount) external;
+    function minStake() external view returns (uint256);
+
+    function isValidatorActive(address validator) external view returns (bool);
+
+    function slash(
+        address validator,
+        uint256 amount,
+        bytes32 reason
+    ) external returns (uint256);
 
     function isSlasherContract(
         address slasherContract
@@ -59,6 +67,8 @@ interface IDINTaskAuditor {
     function setTestDataAssignedFlag(uint _GI, bool flag) external;
 
     function finalizeEvaluation(uint _GI) external returns (bool);
+
+    function slashAuditors(uint _GI) external returns (bool);
 
     function approvedModelIndexes(
         uint _GI
@@ -94,6 +104,7 @@ error TA_CannotSetAuditScore(); // "Audit: Cannot set audit score"
 error TA_ScoreOutOfRange(); // "Audit: Score out of range"
 error TA_AlreadyVoted(); // "Audit: Already voted"
 error TA_CannotFinalizeEvaluation(); // "Audit: Cannot finalize evaluation"
+error TA_AuditorNotActive(); // "Audit: Auditor is not active"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Custom errors — DINTaskCoordinator
@@ -109,7 +120,7 @@ error TC_WrongGI(); // "Task Coordinator: Wrong GI"
 error TC_AggregatorsRegistrationCannotBeStarted(); // "Task Coordinator: Aggregators registration cannot be started"
 error TC_AggregatorsRegistrationNotOpen(); // "Task Coordinator: Aggregators registration not open"
 error TC_InsufficientStake(); // "Task Coordinator: Insufficient stake"
-error TC_ValidatorAlreadyRegistered(); // "Task Coordinator: Validator already registered"
+error TC_AggregatorAlreadyRegistered(); // "Task Coordinator: Validator already registered"
 error TC_AggregatorsRegistrationCannotBeFinished(); // "Task Coordinator: Aggregators registration cannot be finished"
 error TC_AuditorsRegistrationCannotBeStarted(); // "Task Coordinator: Auditors registration cannot be started"
 error TC_AuditorsRegistrationCannotBeFinished(); // "Task Coordinator: Auditors registration cannot be finished"
@@ -139,3 +150,5 @@ error TC_NotReadyToSlashAggregators(); // "Task Coordinator: Not ready to slash 
 error TC_NotReadyToSetTier2Score(); // "Task Coordinator: Not ready to set tier 2 score"
 error TC_NotReadyToEndGI(); // "Task Coordinator: Not ready to end GI"
 error TC_FailedToFinalizeEvaluation(); // "Task Coordinator: Failed to finalize LMS evaluation"
+error TC_AggregatorNotActive(); // "Task Coordinator: Aggregator is not active"
+error TC_FailedToSlashAuditors(); // "Task Coordinator: Failed to slash auditors"

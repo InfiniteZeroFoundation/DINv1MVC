@@ -14,8 +14,6 @@ contract DINTaskCoordinator is Ownable {
 
     bytes32 public genesisModelIpfsHash; // genesis model ipfs hash
 
-    uint256 public minStake = 1_000_000;
-
     mapping(uint => address[]) public dinAggregators;
 
     // Track if an address is registered for a given _GI as an aggregator
@@ -68,6 +66,14 @@ contract DINTaskCoordinator is Ownable {
     event DINValidatorRegistered(uint indexed GI, address indexed validator);
     event Tier1BatchAuto(uint indexed GI, uint indexed batchId);
     event Tier2BatchAuto(uint indexed GI, uint indexed batchId);
+    event AggregatorSlashed(
+        uint indexed GI,
+        uint indexed batchId,
+        address indexed aggregator,
+        bytes32 reason,
+        uint256 requested,
+        uint256 actual
+    );
 
     constructor(address dinvalidatorStakeContract_address) Ownable(msg.sender) {
         dinvalidatorStakeContract = IDinValidatorStake(
@@ -138,10 +144,11 @@ contract DINTaskCoordinator is Ownable {
         if (GIstate != GIstates.DINaggregatorsRegistrationStarted)
             revert TC_AggregatorsRegistrationNotOpen();
 
-        uint256 stake = dinvalidatorStakeContract.getStake(msg.sender);
-        if (stake < minStake) revert TC_InsufficientStake();
+        if (!dinvalidatorStakeContract.isValidatorActive(msg.sender)) {
+            revert TC_AggregatorNotActive();
+        }
         if (isDINAggregator[_GI][msg.sender])
-            revert TC_ValidatorAlreadyRegistered();
+            revert TC_AggregatorAlreadyRegistered();
 
         // Add to list and mark as registered
         dinAggregators[_GI].push(msg.sender);
@@ -238,8 +245,8 @@ contract DINTaskCoordinator is Ownable {
         if (GIstate != GIstates.LMSevaluationClosed)
             revert TC_EvalPhaseNotClosed();
 
-        // ▸ 1. Pull and shuffle validator pool
-        address[] storage valPool = dinAggregators[_GI];
+        // Filter the historical registration list down to currently active validators.
+        address[] memory valPool = _activeAggregatorPool(_GI);
         uint vLen = valPool.length;
         if (vLen < T1_AGGREGATORS_PER_BATCH) revert TC_NotEnoughValidators();
         _shuffleAddressArray(valPool);
@@ -297,7 +304,8 @@ contract DINTaskCoordinator is Ownable {
     }
 
     // ──────────── internal shuffle helpers ────────────
-    function _shuffleAddressArray(address[] storage arr) internal {
+    function _shuffleAddressArray(address[] memory arr) internal view {
+        if (arr.length < 2) return;
         for (uint i = arr.length - 1; i > 0; i--) {
             uint j = uint(
                 keccak256(
@@ -325,6 +333,30 @@ contract DINTaskCoordinator is Ownable {
         out = dinTaskAuditorContract.approvedModelIndexes(_GI);
         if (out.length < T1_MODELS_PER_BATCH)
             revert TC_NotEnoughApprovedModels();
+    }
+
+    function _activeAggregatorPool(
+        uint _GI
+    ) internal view returns (address[] memory activePool) {
+        address[] storage registeredPool = dinAggregators[_GI];
+        uint activeCount;
+
+        for (uint i = 0; i < registeredPool.length; i++) {
+            if (
+                dinvalidatorStakeContract.isValidatorActive(registeredPool[i])
+            ) {
+                activeCount++;
+            }
+        }
+
+        activePool = new address[](activeCount);
+        uint ptr;
+        for (uint i = 0; i < registeredPool.length; i++) {
+            address validator = registeredPool[i];
+            if (dinvalidatorStakeContract.isValidatorActive(validator)) {
+                activePool[ptr++] = validator;
+            }
+        }
     }
 
     // ──────────── read helpers ────────────
@@ -397,6 +429,9 @@ contract DINTaskCoordinator is Ownable {
         // Verify sender is an assigned aggregator
         if (!isTier1Aggregator[_GI][_batchId][msg.sender])
             revert TC_NotBatchAggregator();
+        if (!dinvalidatorStakeContract.isValidatorActive(msg.sender)) {
+            revert TC_AggregatorNotActive();
+        }
         if (t1Submitted[_GI][_batchId][msg.sender])
             revert TC_AlreadySubmitted();
 
@@ -459,10 +494,11 @@ contract DINTaskCoordinator is Ownable {
             revert TC_T2AggregationNotStarted();
         if (_batchId != 0) revert TC_OnlyOneTier2Batch();
 
-        // Verify sender is an assigned aggregator
-
         if (!isTier2Aggregator[_GI][_batchId][msg.sender])
             revert TC_NotBatchAggregator();
+        if (!dinvalidatorStakeContract.isValidatorActive(msg.sender)) {
+            revert TC_AggregatorNotActive();
+        }
         if (t2Submitted[_GI][_batchId][msg.sender])
             revert TC_AlreadySubmitted();
 
@@ -511,7 +547,8 @@ contract DINTaskCoordinator is Ownable {
     function slashAuditors(uint _GI) external onlyOwner onlyCurrentGI(_GI) {
         if (GIstate != GIstates.T2AggregationDone)
             revert TC_NotReadyToSlashAuditors();
-        // The Actual Slashing logic maybe implemented here
+        bool success = dinTaskAuditorContract.slashAuditors(_GI);
+        if (!success) revert TC_FailedToSlashAuditors();
         GIstate = GIstates.AuditorsSlashed;
     }
 
@@ -519,7 +556,7 @@ contract DINTaskCoordinator is Ownable {
         if (GIstate != GIstates.AuditorsSlashed)
             revert TC_NotReadyToSlashAggregators();
 
-        uint256 slashAmount = minStake;
+        uint256 slashAmount = dinvalidatorStakeContract.minStake();
 
         // 1. Tier 1 batches
         Tier1Batch[] storage t1batches = tier1Batches[_GI];
@@ -530,12 +567,28 @@ contract DINTaskCoordinator is Ownable {
 
                 bool submitted = t1Submitted[_GI][b.batchId][aggregator];
                 bool submittedMatching = false;
+                bytes32 reason = "AGG_T1_NO_SUBMISSION";
                 if (submitted) {
                     bytes32 cid = t1SubmissionCID[_GI][b.batchId][aggregator];
                     submittedMatching = (cid == b.finalCID);
+                    if (!submittedMatching) {
+                        reason = "AGG_T1_BAD_CONSENSUS";
+                    }
                 }
                 if (!submitted || !submittedMatching) {
-                    dinvalidatorStakeContract.slash(aggregator, slashAmount);
+                    uint256 actualSlashed = dinvalidatorStakeContract.slash(
+                        aggregator,
+                        slashAmount,
+                        reason
+                    );
+                    emit AggregatorSlashed(
+                        _GI,
+                        b.batchId,
+                        aggregator,
+                        reason,
+                        slashAmount,
+                        actualSlashed
+                    );
                 }
             }
         }
@@ -549,12 +602,28 @@ contract DINTaskCoordinator is Ownable {
 
                 bool submitted = t2Submitted[_GI][b.batchId][aggregator];
                 bool submittedMatching = false;
+                bytes32 reason = "AGG_T2_NO_SUBMISSION";
                 if (submitted) {
                     bytes32 cid = t2SubmissionCID[_GI][b.batchId][aggregator];
                     submittedMatching = (cid == b.finalCID);
+                    if (!submittedMatching) {
+                        reason = "AGG_T2_BAD_CONSENSUS";
+                    }
                 }
                 if (!submitted || !submittedMatching) {
-                    dinvalidatorStakeContract.slash(aggregator, slashAmount);
+                    uint256 actualSlashed = dinvalidatorStakeContract.slash(
+                        aggregator,
+                        slashAmount,
+                        reason
+                    );
+                    emit AggregatorSlashed(
+                        _GI,
+                        b.batchId,
+                        aggregator,
+                        reason,
+                        slashAmount,
+                        actualSlashed
+                    );
                 }
             }
         }

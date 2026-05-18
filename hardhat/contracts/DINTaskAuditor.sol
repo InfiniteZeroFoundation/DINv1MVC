@@ -11,8 +11,6 @@ contract DINTaskAuditor is Ownable {
 
     uint public totalDepositedRewards = 0;
 
-    uint256 public minStake = 1_000_000;
-
     uint MAX_LM_SUBMISSIONS = 10000;
 
     mapping(uint => address[]) public dinAuditors;
@@ -37,7 +35,6 @@ contract DINTaskAuditor is Ownable {
         uint256 minEligibilityQuorum; // e.g., 2 for demo, 7 for spec(≈2/3)
         uint256 minScoreQuorum; // e.g., 2 for demo, 7 for spec
         uint256 passScore; // 0..100
-        uint256 minAuditorStake; // eligibility for auditors
         uint256 MIN_MODELS_PER_BATCH;
     }
 
@@ -129,6 +126,14 @@ contract DINTaskAuditor is Ownable {
     event AuditorsBatchAuto(uint indexed GI, uint indexed batchId);
     event AuditorsBatchesCreated(uint indexed GI, uint batchCount);
     event PassScoreUpdated(uint256 oldScore, uint256 newScore);
+    event AuditorSlashed(
+        uint256 indexed gi,
+        uint indexed batchId,
+        address indexed auditor,
+        bytes32 reason,
+        uint256 requested,
+        uint256 actual
+    );
 
     constructor(
         address _dinvalidatorStakeContract_address,
@@ -147,7 +152,6 @@ contract DINTaskAuditor is Ownable {
             minEligibilityQuorum: 2,
             minScoreQuorum: 2,
             passScore: 50,
-            minAuditorStake: 1_000_000,
             MIN_MODELS_PER_BATCH: 2
         });
     }
@@ -171,8 +175,9 @@ contract DINTaskAuditor is Ownable {
         if (isRegisteredAuditor[_GI][msg.sender])
             revert TA_AuditorAlreadyRegistered();
 
-        uint256 stake = dinvalidatorStakeContract.getStake(msg.sender);
-        if (stake < minStake) revert TA_InsufficientStake();
+        if (!dinvalidatorStakeContract.isValidatorActive(msg.sender)) {
+            revert TA_AuditorNotActive();
+        }
 
         dinAuditors[_GI].push(msg.sender);
         isRegisteredAuditor[_GI][msg.sender] = true;
@@ -226,7 +231,8 @@ contract DINTaskAuditor is Ownable {
     }
 
     // ──────────── internal shuffle helpers ────────────
-    function _shuffleAddressArray(address[] storage arr) internal {
+    function _shuffleAddressArray(address[] memory arr) internal view {
+        if (arr.length < 2) return;
         for (uint i = arr.length - 1; i > 0; i--) {
             uint j = uint(
                 keccak256(
@@ -234,6 +240,30 @@ contract DINTaskAuditor is Ownable {
                 )
             ) % (i + 1);
             (arr[i], arr[j]) = (arr[j], arr[i]);
+        }
+    }
+
+    function _activeAuditorPool(
+        uint _GI
+    ) internal view returns (address[] memory activePool) {
+        address[] storage registeredPool = dinAuditors[_GI];
+        uint activeCount;
+
+        for (uint i = 0; i < registeredPool.length; i++) {
+            if (
+                dinvalidatorStakeContract.isValidatorActive(registeredPool[i])
+            ) {
+                activeCount++;
+            }
+        }
+
+        activePool = new address[](activeCount);
+        uint ptr;
+        for (uint i = 0; i < registeredPool.length; i++) {
+            address auditor = registeredPool[i];
+            if (dinvalidatorStakeContract.isValidatorActive(auditor)) {
+                activePool[ptr++] = auditor;
+            }
         }
     }
 
@@ -254,8 +284,8 @@ contract DINTaskAuditor is Ownable {
         if (dintaskcoordinatorContract.GIstate() != GIstates.LMSclosed)
             revert TA_CannotCreateAuditorsBatches();
 
-        // ▸ 1. Pull and shuffle auditor pool
-        address[] storage auditorPool = dinAuditors[_GI];
+        // Filter the historical registration list down to currently active auditors.
+        address[] memory auditorPool = _activeAuditorPool(_GI);
         uint aLen = auditorPool.length;
 
         if (aLen < params.auditorsPerBatch) revert TA_NotEnoughAuditors();
@@ -428,6 +458,9 @@ contract DINTaskAuditor is Ownable {
             dintaskcoordinatorContract.GIstate() !=
             GIstates.LMSevaluationStarted
         ) revert TA_CannotSetAuditScore();
+        if (!dinvalidatorStakeContract.isValidatorActive(msg.sender)) {
+            revert TA_AuditorNotActive();
+        }
         if (score > 100) revert TA_ScoreOutOfRange();
         if (hasAuditedLM[gi][batchId][msg.sender][modelIndex])
             revert TA_AlreadyVoted();
@@ -505,6 +538,47 @@ contract DINTaskAuditor is Ownable {
 
         // Return true if at least one model was finalized
         return finalizedCount > 0;
+    }
+
+    function slashAuditors(
+        uint _GI
+    ) external onlyTaskCoordinator onlyCurrentGI(_GI) returns (bool) {
+        uint256 slashAmount = dinvalidatorStakeContract.minStake();
+        uint batchCount = auditBatches[_GI].length;
+
+        for (uint b = 0; b < batchCount; b++) {
+            AuditBatch storage batch = auditBatches[_GI][b];
+            for (uint a = 0; a < batch.auditors.length; a++) {
+                address auditor = batch.auditors[a];
+                bool missedVote = false;
+
+                for (uint m = 0; m < batch.modelIndexes.length; m++) {
+                    uint modelIndex = batch.modelIndexes[m];
+                    if (!hasAuditedLM[_GI][b][auditor][modelIndex]) {
+                        missedVote = true;
+                        break;
+                    }
+                }
+
+                if (missedVote) {
+                    uint256 actualSlashed = dinvalidatorStakeContract.slash(
+                        auditor,
+                        slashAmount,
+                        "AUD_NO_VOTE"
+                    );
+                    emit AuditorSlashed(
+                        _GI,
+                        b,
+                        auditor,
+                        "AUD_NO_VOTE",
+                        slashAmount,
+                        actualSlashed
+                    );
+                }
+            }
+        }
+
+        return true;
     }
 
     function approvedModelIndexes(
